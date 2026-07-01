@@ -330,6 +330,44 @@ def test_rope_scalar_only():
         assert out1.shape == s.shape
 
 
+def test_self_attention_equivariance():
+    """Full SelfAttention layer commutes with Spin(3) on MV stream."""
+    from su2eqnn.layers.attention.config import SelfAttentionConfig
+    from su2eqnn.layers.attention.self_attention import SelfAttention
+
+    ITEMS = 6
+    cfg = SelfAttentionConfig(
+        in_mv_channels=C_IN,
+        out_mv_channels=C_OUT,
+        in_s_channels=4,
+        out_s_channels=4,
+        num_heads=2,
+        pos_encoding=False,
+        multi_query=True,
+    )
+    layer = SelfAttention(cfg)
+    layer.eval()
+
+    for _ in range(N_TESTS):
+        x_mv = torch.randn(BATCH, ITEMS, C_IN, 8)
+        x_s  = torch.randn(BATCH, ITEMS, 4)
+        w = random_spin3()
+
+        def act(x):
+            return torch.stack(
+                [spin3_action(w, x[..., c, :]) for c in range(x.shape[-2])], dim=-2
+            )
+
+        out_mv, out_s = layer(x_mv, x_s)
+        path1_mv, path1_s = layer(act(x_mv), x_s)
+        path2_mv = act(out_mv)
+
+        assert torch.allclose(path1_mv, path2_mv, atol=1e-4), \
+            f"SelfAttention MV equivariance failed: {(path1_mv - path2_mv).abs().max():.2e}"
+        assert torch.allclose(path1_s, out_s, atol=1e-4), \
+            f"SelfAttention scalar invariance failed: {(path1_s - out_s).abs().max():.2e}"
+
+
 if __name__ == "__main__":
     test_spin3_inverse()
     test_spin3_norm_preservation()
@@ -348,4 +386,5 @@ if __name__ == "__main__":
     test_embed_vector_equivariance()
     test_sdp_attention_equivariance()
     test_rope_scalar_only()
+    test_self_attention_equivariance()
     print("All equivariance tests passed.")
