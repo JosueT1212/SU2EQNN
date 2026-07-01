@@ -22,17 +22,30 @@ class QKVModule(nn.Module):
     def __init__(self, config: SelfAttentionConfig):
         super().__init__()
         self.config = config
-        total_qkv_mv = 3 * config.hidden_mv_channels * config.num_heads
-        total_qkv_s = (
-            None if config.in_s_channels is None
-            else 3 * config.hidden_s_channels * config.num_heads
+
+        qk_in_mv = config.in_mv_channels + config.additional_qk_mv_channels
+        qk_in_s = (
+            config.in_s_channels + config.additional_qk_s_channels
+            if config.in_s_channels is not None else None
         )
-        self.in_linear = EquiLinear(
-            in_mv_channels=config.in_mv_channels + config.additional_qk_mv_channels,
-            out_mv_channels=total_qkv_mv,
-            in_s_channels=config.in_s_channels + config.additional_qk_s_channels
-            if config.in_s_channels is not None else None,
-            out_s_channels=total_qkv_s,
+
+        self.qk_linear = EquiLinear(
+            in_mv_channels=qk_in_mv,
+            out_mv_channels=2 * config.hidden_mv_channels * config.num_heads,
+            in_s_channels=qk_in_s,
+            out_s_channels=(
+                None if qk_in_s is None
+                else 2 * config.hidden_s_channels * config.num_heads
+            ),
+        )
+        self.v_linear = EquiLinear(
+            in_mv_channels=config.in_mv_channels,
+            out_mv_channels=config.hidden_mv_channels * config.num_heads,
+            in_s_channels=config.in_s_channels,
+            out_s_channels=(
+                None if config.in_s_channels is None
+                else config.hidden_s_channels * config.num_heads
+            ),
         )
         self.norm_mv = EquiLayerNorm()
         self.norm_s = nn.LayerNorm(config.hidden_s_channels) if config.in_s_channels is not None else None
@@ -59,32 +72,55 @@ class QKVModule(nn.Module):
         q_s,  k_s,  v_s  : each (..., num_heads, items, hidden_s_channels) or None
         """
         if additional_qk_features_mv is not None:
-            inputs = torch.cat((inputs, additional_qk_features_mv), dim=-2)
+            qk_inputs = torch.cat((inputs, additional_qk_features_mv), dim=-2)
+        else:
+            qk_inputs = inputs
+
         if scalars is not None and additional_qk_features_s is not None:
-            scalars = torch.cat((scalars, additional_qk_features_s), dim=-1)
+            qk_scalars = torch.cat((scalars, additional_qk_features_s), dim=-1)
+        else:
+            qk_scalars = scalars
 
-        qkv_mv, qkv_s = self.in_linear(inputs, scalars)
+        qk_mv, qk_s = self.qk_linear(qk_inputs, qk_scalars)
+        v_mv, v_s = self.v_linear(inputs, scalars)
 
-        qkv_mv = rearrange(
-            qkv_mv,
-            "... items (qkv hidden heads) x -> qkv ... heads items hidden x",
-            qkv=3,
+        qk_mv = rearrange(
+            qk_mv,
+            "... items (qk hidden heads) x -> qk ... heads items hidden x",
+            qk=2,
             hidden=self.config.hidden_mv_channels,
             heads=self.config.num_heads,
         )
-        q_mv, k_mv, v_mv = qkv_mv
+        q_mv, k_mv = qk_mv
 
-        if qkv_s is not None:
-            qkv_s = rearrange(
-                qkv_s,
-                "... items (qkv hidden heads) -> qkv ... heads items hidden",
-                qkv=3,
+        v_mv = rearrange(
+            v_mv,
+            "... items (hidden heads) x -> ... heads items hidden x",
+            hidden=self.config.hidden_mv_channels,
+            heads=self.config.num_heads,
+        )
+
+        if qk_s is not None:
+            qk_s = rearrange(
+                qk_s,
+                "... items (qk hidden heads) -> qk ... heads items hidden",
+                qk=2,
                 hidden=self.config.hidden_s_channels,
                 heads=self.config.num_heads,
             )
-            q_s, k_s, v_s = qkv_s
+            q_s, k_s = qk_s
         else:
-            q_s = k_s = v_s = None
+            q_s = k_s = None
+
+        if v_s is not None:
+            v_s = rearrange(
+                v_s,
+                "... items (hidden heads) -> ... heads items hidden",
+                hidden=self.config.hidden_s_channels,
+                heads=self.config.num_heads,
+            )
+        else:
+            v_s = None
 
         q_mv = self.norm_mv(q_mv)
         k_mv = self.norm_mv(k_mv)
