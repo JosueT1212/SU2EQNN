@@ -278,6 +278,38 @@ def test_embed_vector_equivariance():
         assert rotated_mv[4:7].abs().max() < TOL, "Rotation leaked to grade-2"
 
 
+def test_sdp_attention_equivariance():
+    """sdp_attention MV output is equivariant; scalar output is invariant."""
+    from su2eqnn.primitives.attention import sdp_attention
+
+    HEADS, ITEMS, C, DS = 2, 5, 3, 4
+    for _ in range(N_TESTS):
+        q_mv = torch.randn(HEADS, ITEMS, C, 8)
+        k_mv = torch.randn(HEADS, ITEMS, C, 8)
+        v_mv = torch.randn(HEADS, ITEMS, C, 8)
+        q_s  = torch.randn(HEADS, ITEMS, DS)
+        k_s  = torch.randn(HEADS, ITEMS, DS)
+        v_s  = torch.randn(HEADS, ITEMS, DS)
+        w = random_spin3()
+
+        def act_mv(x):
+            return torch.stack([spin3_action(w, x[..., c, :]) for c in range(x.shape[-2])], dim=-2)
+
+        # Compute on original, then rotate output
+        out_mv, out_s = sdp_attention(q_mv, k_mv, v_mv, q_s, k_s, v_s)
+        path2_mv = act_mv(out_mv)
+
+        # Rotate inputs, then compute
+        path1_mv, path1_s = sdp_attention(
+            act_mv(q_mv), act_mv(k_mv), act_mv(v_mv), q_s, k_s, v_s
+        )
+
+        assert torch.allclose(path1_mv, path2_mv, atol=1e-4), \
+            f"sdp_attention MV equivariance failed: {(path1_mv - path2_mv).abs().max():.2e}"
+        assert torch.allclose(path1_s, out_s, atol=1e-4), \
+            f"sdp_attention scalar invariance failed: {(path1_s - out_s).abs().max():.2e}"
+
+
 if __name__ == "__main__":
     test_spin3_inverse()
     test_spin3_norm_preservation()
@@ -294,4 +326,5 @@ if __name__ == "__main__":
     test_equi_linear_with_scalars()
     test_embed_extract_vector()
     test_embed_vector_equivariance()
+    test_sdp_attention_equivariance()
     print("All equivariance tests passed.")
