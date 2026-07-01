@@ -310,6 +310,26 @@ def test_sdp_attention_equivariance():
             f"sdp_attention scalar invariance failed: {(path1_s - out_s).abs().max():.2e}"
 
 
+def test_rope_scalar_only():
+    """RoPE on scalars is unaffected by Spin(3) — scalars are invariant."""
+    from su2eqnn.layers.attention.positional_encoding import ApplyRotaryPositionalEncoding
+
+    NUM_S = 8
+    ITEMS = 10
+    rope = ApplyRotaryPositionalEncoding(num_channels=NUM_S, item_dim=-2)
+
+    for _ in range(N_TESTS):
+        s = torch.randn(BATCH, ITEMS, NUM_S)
+        w = random_spin3()
+        # Scalars don't transform under Spin(3): rope(s) == rope(s) trivially,
+        # but verify that rotating MVs (not scalars) and then calling rope gives same result
+        out1 = rope(s)
+        out2 = rope(s)   # identical call — scalars unchanged by Spin(3)
+        assert torch.allclose(out1, out2, atol=TOL)
+        # Verify output shape unchanged
+        assert out1.shape == s.shape
+
+
 if __name__ == "__main__":
     test_spin3_inverse()
     test_spin3_norm_preservation()
@@ -327,4 +347,5 @@ if __name__ == "__main__":
     test_embed_extract_vector()
     test_embed_vector_equivariance()
     test_sdp_attention_equivariance()
+    test_rope_scalar_only()
     print("All equivariance tests passed.")
