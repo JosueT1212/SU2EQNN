@@ -43,6 +43,7 @@ class ApplyRotaryPositionalEncoding(nn.Module):
 
         self._seq_len_cached = None
         self._device_cached = None
+        self._dtype_cached = None
         self._cos_cached = None
         self._sin_cached = None
 
@@ -64,10 +65,11 @@ class ApplyRotaryPositionalEncoding(nn.Module):
 
     def _update_cache(self, inputs: torch.Tensor) -> None:
         seq_len = inputs.shape[self.item_dim]
-        if seq_len == self._seq_len_cached and inputs.device == self._device_cached:
+        if seq_len == self._seq_len_cached and inputs.device == self._device_cached and inputs.dtype == self._dtype_cached:
             return
         self._seq_len_cached = seq_len
         self._device_cached = inputs.device
+        self._dtype_cached = inputs.dtype
         t = torch.arange(seq_len, device=inputs.device).type_as(self.inv_freq)
         freqs = cached_einsum("i,j->ij", t, self.inv_freq)
         emb = torch.cat((freqs, freqs), dim=-1)
@@ -78,8 +80,8 @@ class ApplyRotaryPositionalEncoding(nn.Module):
         for _ in range(item_dim + 1, inputs.ndim - 1):
             cos = cos.unsqueeze(1)
             sin = sin.unsqueeze(1)
-        self._cos_cached = cos
-        self._sin_cached = sin
+        self._cos_cached = cos.to(dtype=inputs.dtype)
+        self._sin_cached = sin.to(dtype=inputs.dtype)
 
     @staticmethod
     def _rotate_half(x: torch.Tensor) -> torch.Tensor:

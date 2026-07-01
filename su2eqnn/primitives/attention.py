@@ -40,7 +40,7 @@ def sdp_attention(
     q_s  : Tensor with shape (..., items, Ds) or None
     k_s  : Tensor with shape (..., items, Ds) or None
     v_s  : Tensor with shape (..., items, Ds) or None
-    attn_mask : optional Tensor with shape (..., items, items)
+    attn_mask : optional Tensor with shape (..., items, items) — internally unsqueezed to (..., 1, items, items) for SDPA broadcast
 
     Returns
     -------
@@ -63,6 +63,9 @@ def sdp_attention(
         q = q_mv_flat
         k = k_mv_flat
         v = v_mv_flat
+
+    if attn_mask is not None:
+        attn_mask = attn_mask.unsqueeze(-3)
 
     out = torch_sdpa(q, k, v, attn_mask=attn_mask)
 
