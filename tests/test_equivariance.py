@@ -421,6 +421,29 @@ def test_grade_dropout_equivariance():
             f"grade_dropout equivariance failed: {(lhs - rhs).abs().max():.2e}"
 
 
+def test_scalar_gated_nonlinearity_equivariance():
+    """ScalarGatedNonlinearity commutes with Spin(3) on MV stream."""
+    from su2eqnn.layers.mlp.nonlinearities import ScalarGatedNonlinearity
+
+    layer = ScalarGatedNonlinearity("gelu")
+    for _ in range(N_TESTS):
+        x = torch.randn(BATCH, C_IN, 8)
+        s = torch.randn(BATCH, 4)
+        w = random_spin3()
+
+        def act(mv):
+            return torch.stack([spin3_action(w, mv[..., c, :]) for c in range(mv.shape[-2])], dim=-2)
+
+        out_mv, out_s = layer(x, s)
+        path1_mv, path1_s = layer(act(x), s)
+        path2_mv = act(out_mv)
+
+        assert torch.allclose(path1_mv, path2_mv, atol=TOL), \
+            f"ScalarGatedNonlinearity MV equivariance failed: {(path1_mv - path2_mv).abs().max():.2e}"
+        assert torch.allclose(path1_s, out_s, atol=TOL), \
+            f"ScalarGatedNonlinearity scalar invariance failed"
+
+
 if __name__ == "__main__":
     test_spin3_inverse()
     test_spin3_norm_preservation()
@@ -442,4 +465,5 @@ if __name__ == "__main__":
     test_self_attention_equivariance()
     test_self_attention_additional_qk_equivariance()
     test_grade_dropout_equivariance()
+    test_scalar_gated_nonlinearity_equivariance()
     print("All equivariance tests passed.")
