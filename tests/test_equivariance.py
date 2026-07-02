@@ -469,6 +469,38 @@ def test_geometric_bilinear_equivariance():
             f"GeometricBilinear scalar invariance failed"
 
 
+def test_geo_mlp_equivariance():
+    """GeoMLP commutes with Spin(3) on the MV stream."""
+    from su2eqnn.layers.mlp.config import MLPConfig
+    from su2eqnn.layers.mlp.mlp import GeoMLP
+
+    config = MLPConfig(
+        mv_channels=[C_IN, C_IN * 2, C_OUT],
+        s_channels=[4, 8, 4],
+        activation="gelu",
+        dropout_prob=None,
+    )
+    layer = GeoMLP(config)
+    layer.eval()
+
+    for _ in range(N_TESTS):
+        x = torch.randn(BATCH, C_IN, 8)
+        s = torch.randn(BATCH, 4)
+        w = random_spin3()
+
+        def act(mv):
+            return torch.stack([spin3_action(w, mv[..., c, :]) for c in range(mv.shape[-2])], dim=-2)
+
+        out_mv, out_s = layer(x, s)
+        path1_mv, path1_s = layer(act(x), s)
+        path2_mv = act(out_mv)
+
+        assert torch.allclose(path1_mv, path2_mv, atol=1e-4), \
+            f"GeoMLP MV equivariance failed: {(path1_mv - path2_mv).abs().max():.2e}"
+        assert torch.allclose(path1_s, out_s, atol=1e-4), \
+            f"GeoMLP scalar invariance failed"
+
+
 if __name__ == "__main__":
     test_spin3_inverse()
     test_spin3_norm_preservation()
@@ -492,4 +524,5 @@ if __name__ == "__main__":
     test_grade_dropout_equivariance()
     test_scalar_gated_nonlinearity_equivariance()
     test_geometric_bilinear_equivariance()
+    test_geo_mlp_equivariance()
     print("All equivariance tests passed.")
