@@ -21,7 +21,7 @@ class ScalarGatedNonlinearity(nn.Module):
     nonlinearity : {"relu", "sigmoid", "gelu"}
     """
 
-    def __init__(self, nonlinearity: str = "gelu", **kwargs) -> None:
+    def __init__(self, nonlinearity: str = "gelu") -> None:
         super().__init__()
         _gated = {"relu": gated_relu, "gelu": gated_gelu, "sigmoid": gated_sigmoid}
         _scalar = {
