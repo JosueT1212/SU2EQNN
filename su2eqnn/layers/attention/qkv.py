@@ -125,7 +125,11 @@ class QKVModule(nn.Module):
         k_mv = self.norm_mv(k_mv)
         v_mv = self.norm_mv(v_mv)
 
-        
+        if self.norm_s is not None and q_s is not None:
+            q_s = self.norm_s(q_s)
+            k_s = self.norm_s(k_s)
+            v_s = self.norm_s(v_s)
+
         return q_mv, k_mv, v_mv, q_s, k_s, v_s
 
 
@@ -172,7 +176,11 @@ class MultiQueryQKVModule(nn.Module):
             ),
         )
         self.norm_mv = EquiLayerNorm()
-        
+        self.norm_s = (
+            nn.LayerNorm(config.hidden_s_channels)
+            if config.in_s_channels is not None else None
+        )
+
     def forward(
         self,
         inputs: torch.Tensor,
@@ -235,6 +243,9 @@ class MultiQueryQKVModule(nn.Module):
         k_mv = self.norm_mv(k_mv)
         v_mv = self.norm_mv(v_mv)
 
-     
+        if self.norm_s is not None and q_s is not None:
+            q_s = self.norm_s(q_s)
+            k_s = self.norm_s(k_s)
+            v_s = self.norm_s(v_s)
 
         return q_mv, k_mv, v_mv, q_s, k_s, v_s
