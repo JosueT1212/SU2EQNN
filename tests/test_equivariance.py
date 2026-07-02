@@ -407,6 +407,20 @@ def test_self_attention_additional_qk_equivariance():
             f"SelfAttention+additional_qk MV equivariance failed: {(path1_mv-path2_mv).abs().max():.2e}"
 
 
+def test_grade_dropout_equivariance():
+    """grade_dropout commutes with Spin(3) when training=False (deterministic)."""
+    from su2eqnn.primitives.dropout import grade_dropout
+
+    for _ in range(N_TESTS):
+        x = torch.randn(BATCH, 8)
+        w = random_spin3()
+        # training=False → no stochastic dropout, deterministic pass-through
+        lhs = grade_dropout(spin3_action(w, x), p=0.0, training=False)
+        rhs = spin3_action(w, grade_dropout(x, p=0.0, training=False))
+        assert torch.allclose(lhs, rhs, atol=TOL), \
+            f"grade_dropout equivariance failed: {(lhs - rhs).abs().max():.2e}"
+
+
 if __name__ == "__main__":
     test_spin3_inverse()
     test_spin3_norm_preservation()
@@ -427,4 +441,5 @@ if __name__ == "__main__":
     test_rope_scalar_only()
     test_self_attention_equivariance()
     test_self_attention_additional_qk_equivariance()
+    test_grade_dropout_equivariance()
     print("All equivariance tests passed.")
