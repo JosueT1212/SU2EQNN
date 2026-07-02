@@ -1,6 +1,6 @@
 """GradeDropout nn.Module for Cl(3,0) dual-stream (MV + scalar)."""
 
-from typing import Tuple
+from typing import Optional, Tuple
 
 import torch
 from torch import nn
@@ -24,20 +24,20 @@ class GradeDropout(nn.Module):
     def forward(
         self,
         multivectors: torch.Tensor,
-        scalars: torch.Tensor,
-    ) -> Tuple[torch.Tensor, torch.Tensor]:
+        scalars: Optional[torch.Tensor] = None,
+    ) -> Tuple[torch.Tensor, Optional[torch.Tensor]]:
         """Forward pass.
 
         Parameters
         ----------
         multivectors : torch.Tensor with shape (..., C, 8)
-        scalars      : torch.Tensor with shape (..., S)
+        scalars      : torch.Tensor with shape (..., S) or None
 
         Returns
         -------
         out_mv : torch.Tensor with shape (..., C, 8)
-        out_s  : torch.Tensor with shape (..., S)
+        out_s  : torch.Tensor with shape (..., S) or None
         """
         out_mv = grade_dropout(multivectors, p=self._p, training=self.training)
-        out_s = torch.nn.functional.dropout(scalars, p=self._p, training=self.training)
+        out_s = torch.nn.functional.dropout(scalars, p=self._p, training=self.training) if scalars is not None else None
         return out_mv, out_s

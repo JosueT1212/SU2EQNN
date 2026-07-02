@@ -31,6 +31,10 @@ class MLPConfig:
     def __post_init__(self):
         if self.mv_channels is None:
             raise ValueError("mv_channels is required and must have at least 2 entries")
+        if self.s_channels is not None and len(self.s_channels) != len(self.mv_channels):
+            raise ValueError(
+                f"s_channels length {len(self.s_channels)} must match mv_channels length {len(self.mv_channels)}"
+            )
         if isinstance(self.dropout_prob, str) and self.dropout_prob.lower() in ("null", "none"):
             self.dropout_prob = None
 
