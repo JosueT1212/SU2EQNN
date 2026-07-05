@@ -62,7 +62,6 @@ class GATr(nn.Module):
         checkpoint_blocks: bool = False,
         dropout_prob: Optional[float] = None,
         double_layernorm: bool = False,
-        **kwargs,
     ) -> None:
         super().__init__()
         self._reinsert_mv_channels = reinsert_mv_channels
@@ -168,7 +167,8 @@ class GATr(nn.Module):
         if self._reinsert_s_channels is None:
             additional_qk_features_s = None
         else:
-            assert scalars is not None, "reinsert_s_channels requires scalars to be provided"
+            if scalars is None:
+                raise ValueError("reinsert_s_channels requires scalars to be provided")
             additional_qk_features_s = scalars[..., self._reinsert_s_channels]
 
         return additional_qk_features_mv, additional_qk_features_s
