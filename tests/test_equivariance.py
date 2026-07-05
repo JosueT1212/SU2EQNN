@@ -501,6 +501,80 @@ def test_geo_mlp_equivariance():
             f"GeoMLP scalar invariance failed"
 
 
+def test_gatr_block_equivariance():
+    """GATrBlock commutes with Spin(3) on MV stream; scalars are invariant."""
+    from su2eqnn.layers.attention.config import SelfAttentionConfig
+    from su2eqnn.layers.mlp.config import MLPConfig
+    from su2eqnn.layers.gatr_block import GATrBlock
+
+    ITEMS = 5
+    MV_C = 4
+    S_C = 8
+
+    block = GATrBlock(
+        mv_channels=MV_C,
+        s_channels=S_C,
+        attention=SelfAttentionConfig(num_heads=2, multi_query=True, pos_encoding=False),
+        mlp=MLPConfig(activation="gelu"),
+    )
+    block.eval()
+
+    for _ in range(N_TESTS):
+        x_mv = torch.randn(BATCH, ITEMS, MV_C, 8)
+        x_s  = torch.randn(BATCH, ITEMS, S_C)
+        w = random_spin3()
+
+        def act(mv):
+            return torch.stack(
+                [spin3_action(w, mv[..., c, :]) for c in range(mv.shape[-2])], dim=-2
+            )
+
+        out_mv, out_s   = block(x_mv, scalars=x_s)
+        path1_mv, path1_s = block(act(x_mv), scalars=x_s)
+        path2_mv = act(out_mv)
+
+        assert torch.allclose(path1_mv, path2_mv, atol=1e-4), \
+            f"GATrBlock MV equivariance failed: {(path1_mv - path2_mv).abs().max():.2e}"
+        assert torch.allclose(path1_s, out_s, atol=1e-4), \
+            f"GATrBlock scalar invariance failed: {(path1_s - out_s).abs().max():.2e}"
+
+
+def test_gatr_block_no_scalars_equivariance():
+    """GATrBlock without scalar stream commutes with Spin(3); out_s is None."""
+    from su2eqnn.layers.attention.config import SelfAttentionConfig
+    from su2eqnn.layers.mlp.config import MLPConfig
+    from su2eqnn.layers.gatr_block import GATrBlock
+
+    ITEMS = 5
+    MV_C = 4
+
+    block = GATrBlock(
+        mv_channels=MV_C,
+        s_channels=None,
+        attention=SelfAttentionConfig(num_heads=2, multi_query=True, pos_encoding=False),
+        mlp=MLPConfig(activation="gelu"),
+    )
+    block.eval()
+
+    for _ in range(N_TESTS):
+        x_mv = torch.randn(BATCH, ITEMS, MV_C, 8)
+        w = random_spin3()
+
+        def act(mv):
+            return torch.stack(
+                [spin3_action(w, mv[..., c, :]) for c in range(mv.shape[-2])], dim=-2
+            )
+
+        out_mv, out_s     = block(x_mv, scalars=None)
+        path1_mv, path1_s = block(act(x_mv), scalars=None)
+        path2_mv = act(out_mv)
+
+        assert out_s is None, "Expected out_s=None when s_channels=None"
+        assert path1_s is None
+        assert torch.allclose(path1_mv, path2_mv, atol=1e-4), \
+            f"GATrBlock (no scalars) MV equivariance failed: {(path1_mv - path2_mv).abs().max():.2e}"
+
+
 if __name__ == "__main__":
     test_spin3_inverse()
     test_spin3_norm_preservation()
@@ -525,4 +599,6 @@ if __name__ == "__main__":
     test_scalar_gated_nonlinearity_equivariance()
     test_geometric_bilinear_equivariance()
     test_geo_mlp_equivariance()
+    test_gatr_block_equivariance()
+    test_gatr_block_no_scalars_equivariance()
     print("All equivariance tests passed.")
