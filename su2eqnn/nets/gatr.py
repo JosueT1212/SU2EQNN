@@ -1,0 +1,174 @@
+"""Spin(3)-equivariant transformer network for Cl(3,0)."""
+
+from dataclasses import replace
+from typing import Optional, Tuple
+
+import torch
+from torch import nn
+from torch.utils.checkpoint import checkpoint
+
+from su2eqnn.layers.attention.config import SelfAttentionConfig
+from su2eqnn.layers.gatr_block import GATrBlock
+from su2eqnn.layers.linear import EquiLinear
+from su2eqnn.layers.mlp.config import MLPConfig
+
+
+class GATr(nn.Module):
+    """Spin(3)-equivariant transformer for Cl(3,0) multivector data.
+
+    Stacks `num_blocks` GATrBlocks with initial and final EquiLinear projections.
+
+    Input shape:  (..., items, in_mv_channels, 8)
+    Output shape: (..., items, out_mv_channels, 8)
+    Hidden shape: (..., items, hidden_mv_channels, 8)
+
+    Parameters
+    ----------
+    in_mv_channels : int
+    out_mv_channels : int
+    hidden_mv_channels : int
+    in_s_channels : int or None
+    out_s_channels : int or None
+    hidden_s_channels : int or None
+    attention : SelfAttentionConfig
+        Template; channels and additional_qk_*_channels filled in here.
+    mlp : MLPConfig
+        Template; channels filled in by each GATrBlock.
+    num_blocks : int
+    reinsert_mv_channels : tuple of int or None
+        Indices of input MV channels to re-inject as additional Q/K features in every block.
+        Enables stable injection of reference vectors (e.g. beam token) through all blocks.
+    reinsert_s_channels : tuple of int or None
+        Indices of input scalar channels to re-inject as additional Q/K features in every block.
+    checkpoint_blocks : bool
+        Use gradient checkpointing to save memory at the cost of slower backward.
+    dropout_prob : float or None
+    double_layernorm : bool
+    """
+
+    def __init__(
+        self,
+        in_mv_channels: int,
+        out_mv_channels: int,
+        hidden_mv_channels: int,
+        in_s_channels: Optional[int],
+        out_s_channels: Optional[int],
+        hidden_s_channels: Optional[int],
+        attention: SelfAttentionConfig,
+        mlp: MLPConfig,
+        num_blocks: int = 10,
+        reinsert_mv_channels: Optional[Tuple[int, ...]] = None,
+        reinsert_s_channels: Optional[Tuple[int, ...]] = None,
+        checkpoint_blocks: bool = False,
+        dropout_prob: Optional[float] = None,
+        double_layernorm: bool = False,
+        **kwargs,
+    ) -> None:
+        super().__init__()
+        self._reinsert_mv_channels = reinsert_mv_channels
+        self._reinsert_s_channels = reinsert_s_channels
+        self._checkpoint_blocks = checkpoint_blocks
+
+        self.linear_in = EquiLinear(
+            in_mv_channels,
+            hidden_mv_channels,
+            in_s_channels=in_s_channels,
+            out_s_channels=hidden_s_channels,
+        )
+
+        attention = replace(
+            SelfAttentionConfig.cast(attention),
+            additional_qk_mv_channels=(
+                0 if reinsert_mv_channels is None else len(reinsert_mv_channels)
+            ),
+            additional_qk_s_channels=(
+                0 if reinsert_s_channels is None else len(reinsert_s_channels)
+            ),
+        )
+        mlp = MLPConfig.cast(mlp)
+
+        self.blocks = nn.ModuleList([
+            GATrBlock(
+                mv_channels=hidden_mv_channels,
+                s_channels=hidden_s_channels,
+                attention=attention,
+                mlp=mlp,
+                dropout_prob=dropout_prob,
+                double_layernorm=double_layernorm,
+            )
+            for _ in range(num_blocks)
+        ])
+
+        self.linear_out = EquiLinear(
+            hidden_mv_channels,
+            out_mv_channels,
+            in_s_channels=hidden_s_channels,
+            out_s_channels=out_s_channels,
+        )
+
+    def forward(
+        self,
+        multivectors: torch.Tensor,
+        scalars: Optional[torch.Tensor] = None,
+        attention_mask: Optional[torch.Tensor] = None,
+    ) -> Tuple[torch.Tensor, Optional[torch.Tensor]]:
+        """Forward pass.
+
+        Parameters
+        ----------
+        multivectors : Tensor (..., items, in_mv_channels, 8)
+        scalars : Tensor (..., items, in_s_channels) or None
+        attention_mask : Tensor (..., items, items) or None
+
+        Returns
+        -------
+        out_mv : Tensor (..., items, out_mv_channels, 8)
+        out_s : Tensor (..., items, out_s_channels) or None
+        """
+        additional_qk_features_mv, additional_qk_features_s = (
+            self._construct_reinserted_channels(multivectors, scalars)
+        )
+
+        h_mv, h_s = self.linear_in(multivectors, scalars=scalars)
+
+        for block in self.blocks:
+            if self._checkpoint_blocks:
+                h_mv, h_s = checkpoint(
+                    block,
+                    h_mv,
+                    use_reentrant=False,
+                    scalars=h_s,
+                    additional_qk_features_mv=additional_qk_features_mv,
+                    additional_qk_features_s=additional_qk_features_s,
+                    attention_mask=attention_mask,
+                )
+            else:
+                h_mv, h_s = block(
+                    h_mv,
+                    scalars=h_s,
+                    additional_qk_features_mv=additional_qk_features_mv,
+                    additional_qk_features_s=additional_qk_features_s,
+                    attention_mask=attention_mask,
+                )
+
+        out_mv, out_s = self.linear_out(h_mv, scalars=h_s)
+        return out_mv, out_s
+
+    def _construct_reinserted_channels(
+        self,
+        multivectors: torch.Tensor,
+        scalars: Optional[torch.Tensor],
+    ) -> Tuple[Optional[torch.Tensor], Optional[torch.Tensor]]:
+        """Slice input channels to re-inject as additional Q/K features in every block."""
+        if self._reinsert_mv_channels is None:
+            additional_qk_features_mv = None
+        else:
+            additional_qk_features_mv = multivectors[..., self._reinsert_mv_channels, :]
+
+        if self._reinsert_s_channels is None:
+            additional_qk_features_s = None
+        else:
+            assert scalars is not None, "reinsert_s_channels requires scalars to be provided"
+            additional_qk_features_s = scalars[..., self._reinsert_s_channels]
+
+        return additional_qk_features_mv, additional_qk_features_s
