@@ -270,3 +270,62 @@ def test_wrapper_gradient_flows():
     # at least one parameter should have gradient
     has_grad = any(p.grad is not None for p in net.parameters())
     assert has_grad
+
+
+# ---------------------------------------------------------------------------
+# Task 6: Experiment — smoke test
+# ---------------------------------------------------------------------------
+
+from experiments.top_tagging.experiment import build_model
+from torch_geometric.loader import DataLoader as GeometricDataLoader
+from experiments.top_tagging.embedding import embed_tagging_data
+
+
+class _FakeCfg:
+    """Minimal config object for testing."""
+    class model:
+        hidden_mv_channels = 4
+        num_blocks = 2
+        num_heads = 2
+    class data:
+        rescale_data = True
+        two_beams = True
+    class training:
+        lr = 1e-3
+
+
+def test_build_model_returns_wrapper():
+    model = build_model(_FakeCfg())
+    assert isinstance(model, TopTaggingWrapper)
+
+
+def test_smoke_one_training_step():
+    """One forward + backward through the full pipeline on real data."""
+    ds = TopTaggingDataset(rescale_data=False)
+    ds.load_data(str(DATA_PATH), "train")
+
+    loader = GeometricDataLoader(ds, batch_size=4, shuffle=False)
+    batch = next(iter(loader))
+
+    model = build_model(_FakeCfg())
+    optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
+    criterion = torch.nn.BCEWithLogitsLoss()
+
+    embedding = embed_tagging_data(
+        batch.x, batch.ptr,
+        two_beams=True, rescale=True,
+    )
+    logits = model(embedding)                              # (4, 1)
+    targets = batch.label.float().unsqueeze(1)            # (4, 1)
+    loss = criterion(logits, targets)
+
+    assert loss.ndim == 0             # scalar
+    assert not torch.isnan(loss)
+
+    optimizer.zero_grad()
+    loss.backward()
+    optimizer.step()
+
+    # parameters changed after optimizer step
+    p0 = next(model.parameters())
+    assert p0.grad is not None

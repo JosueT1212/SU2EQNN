@@ -1,0 +1,161 @@
+"""Top quark jet tagging experiment using GATr on Cl(3,0).
+
+Entry point:
+    python -m experiments.top_tagging.experiment
+
+Hydra config: config/top_tagging.yaml
+"""
+
+import os
+import time
+import logging
+
+import torch
+import hydra
+from omegaconf import DictConfig
+from torch_geometric.loader import DataLoader as GeometricDataLoader
+from sklearn.metrics import roc_auc_score, accuracy_score
+
+from su2eqnn.nets.gatr import GATr
+from su2eqnn.layers.attention.config import SelfAttentionConfig
+from su2eqnn.layers.mlp.config import MLPConfig
+from experiments.top_tagging.dataset import TopTaggingDataset
+from experiments.top_tagging.embedding import embed_tagging_data
+from experiments.top_tagging.wrapper import TopTaggingWrapper
+
+log = logging.getLogger(__name__)
+
+
+def build_model(cfg) -> TopTaggingWrapper:
+    """Instantiate GATr + TopTaggingWrapper from config.
+
+    Parameters
+    ----------
+    cfg : DictConfig or object with .model attributes:
+        hidden_mv_channels : int
+        num_blocks         : int
+        num_heads          : int
+    """
+    net = GATr(
+        in_mv_channels=1,
+        out_mv_channels=1,
+        hidden_mv_channels=cfg.model.hidden_mv_channels,
+        in_s_channels=None,
+        out_s_channels=None,
+        hidden_s_channels=None,
+        attention=SelfAttentionConfig(num_heads=cfg.model.num_heads),
+        mlp=MLPConfig(activation="gelu"),
+        num_blocks=cfg.model.num_blocks,
+    )
+    return TopTaggingWrapper(net)
+
+
+def evaluate(model, loader, cfg, device):
+    """Run evaluation on a DataLoader, return AUC and accuracy."""
+    model.eval()
+    all_logits, all_labels = [], []
+    with torch.no_grad():
+        for batch in loader:
+            batch = batch.to(device)
+            embedding = embed_tagging_data(
+                batch.x, batch.ptr,
+                two_beams=cfg.data.two_beams,
+                rescale=cfg.data.rescale_data,
+            )
+            logits = model(embedding)  # (B, 1)
+            all_logits.append(logits.cpu())
+            all_labels.append(batch.label.cpu())
+
+    logits = torch.cat(all_logits, dim=0).squeeze(1).numpy()
+    labels = torch.cat(all_labels, dim=0).numpy().astype(int)
+    probs = torch.sigmoid(torch.tensor(logits)).numpy()
+    auc = roc_auc_score(labels, probs)
+    preds = (probs > 0.5).astype(int)
+    acc = accuracy_score(labels, preds)
+    return {"auc": auc, "accuracy": acc}
+
+
+def run_experiment(cfg: DictConfig) -> None:
+    """Training + evaluation loop."""
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    log.info(f"Using device: {device}")
+
+    # Data
+    log.info("Loading datasets...")
+    ds_train = TopTaggingDataset(rescale_data=cfg.data.rescale_data)
+    ds_val = TopTaggingDataset(rescale_data=cfg.data.rescale_data)
+    ds_test = TopTaggingDataset(rescale_data=cfg.data.rescale_data)
+    ds_train.load_data(cfg.data.path, "train")
+    ds_val.load_data(cfg.data.path, "val")
+    ds_test.load_data(cfg.data.path, "test")
+
+    loader_train = GeometricDataLoader(ds_train, batch_size=cfg.training.batch_size, shuffle=True)
+    loader_val = GeometricDataLoader(ds_val, batch_size=cfg.evaluation.batch_size, shuffle=False)
+    loader_test = GeometricDataLoader(ds_test, batch_size=cfg.evaluation.batch_size, shuffle=False)
+
+    # Model
+    model = build_model(cfg).to(device)
+    n_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
+    log.info(f"Model parameters: {n_params:,}")
+
+    optimizer = torch.optim.Adam(model.parameters(), lr=cfg.training.lr)
+    criterion = torch.nn.BCEWithLogitsLoss()
+
+    best_auc = 0.0
+    ckpt_path = cfg.training.checkpoint_path
+    os.makedirs(os.path.dirname(ckpt_path), exist_ok=True)
+
+    global_step = 0
+    for epoch in range(1, cfg.training.epochs + 1):
+        model.train()
+        epoch_loss = 0.0
+        t0 = time.time()
+
+        for batch in loader_train:
+            batch = batch.to(device)
+            embedding = embed_tagging_data(
+                batch.x, batch.ptr,
+                two_beams=cfg.data.two_beams,
+                rescale=cfg.data.rescale_data,
+            )
+            logits = model(embedding)              # (B, 1)
+            targets = batch.label.float().unsqueeze(1)  # (B, 1)
+            loss = criterion(logits, targets)
+
+            optimizer.zero_grad()
+            loss.backward()
+            optimizer.step()
+
+            epoch_loss += loss.item()
+            global_step += 1
+
+            if global_step % cfg.training.validate_every_n_steps == 0:
+                metrics = evaluate(model, loader_val, cfg, device)
+                log.info(
+                    f"Step {global_step} | val AUC={metrics['auc']:.4f} "
+                    f"acc={metrics['accuracy']:.4f}"
+                )
+                if metrics["auc"] > best_auc:
+                    best_auc = metrics["auc"]
+                    torch.save(model.state_dict(), ckpt_path)
+                    log.info(f"Saved best model (AUC={best_auc:.4f}) to {ckpt_path}")
+                model.train()
+
+        dt = time.time() - t0
+        avg_loss = epoch_loss / len(loader_train)
+        log.info(f"Epoch {epoch}/{cfg.training.epochs} | loss={avg_loss:.4f} | {dt:.1f}s")
+
+    # Final test evaluation
+    if os.path.exists(ckpt_path):
+        model.load_state_dict(torch.load(ckpt_path, map_location=device))
+    test_metrics = evaluate(model, loader_test, cfg, device)
+    log.info(f"Test AUC={test_metrics['auc']:.4f} | accuracy={test_metrics['accuracy']:.4f}")
+
+
+@hydra.main(config_path="../../config", config_name="top_tagging", version_base=None)
+def main(cfg: DictConfig) -> None:
+    run_experiment(cfg)
+
+
+if __name__ == "__main__":
+    main()
