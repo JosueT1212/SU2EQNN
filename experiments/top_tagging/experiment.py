@@ -103,7 +103,9 @@ def run_experiment(cfg: DictConfig) -> None:
 
     best_auc = 0.0
     ckpt_path = cfg.training.checkpoint_path
-    os.makedirs(os.path.dirname(ckpt_path), exist_ok=True)
+    dirname = os.path.dirname(ckpt_path)
+    if dirname:
+        os.makedirs(dirname, exist_ok=True)
 
     global_step = 0
     for epoch in range(1, cfg.training.epochs + 1):
