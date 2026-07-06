@@ -13,6 +13,10 @@ dependencies = [
     "numpy",
     "opt_einsum",
     "einops",
+    "torch-geometric",
+    "hydra-core",
+    "omegaconf",
+    "scikit-learn",
 ]
 
 [tool.pytest.ini_options]
