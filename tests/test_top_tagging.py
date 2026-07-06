@@ -54,3 +54,52 @@ def test_embed_spurions_dtype():
 def test_embed_spurions_device():
     s = embed_spurions(device=torch.device("cpu"))
     assert s.device.type == "cpu"
+
+
+# ---------------------------------------------------------------------------
+# Task 3: Dataset
+# ---------------------------------------------------------------------------
+
+from experiments.top_tagging.dataset import TopTaggingDataset, EPS
+
+
+def test_dataset_train_length():
+    ds = TopTaggingDataset(rescale_data=False)
+    ds.load_data(str(DATA_PATH), "train")
+    assert len(ds) == 20000
+
+
+def test_dataset_test_length():
+    ds = TopTaggingDataset(rescale_data=False)
+    ds.load_data(str(DATA_PATH), "test")
+    assert len(ds) == 2000
+
+
+def test_dataset_item_shape():
+    ds = TopTaggingDataset(rescale_data=False)
+    ds.load_data(str(DATA_PATH), "train")
+    item = ds[0]
+    assert item.x.ndim == 2
+    assert item.x.shape[1] == 4
+    assert 1 <= item.x.shape[0] <= 200
+
+
+def test_dataset_label_dtype():
+    ds = TopTaggingDataset(rescale_data=False)
+    ds.load_data(str(DATA_PATH), "train")
+    assert ds[0].label.dtype == torch.bool
+
+
+def test_dataset_drops_padding():
+    ds = TopTaggingDataset(rescale_data=False)
+    ds.load_data(str(DATA_PATH), "test")
+    for item in ds.data_list[:20]:
+        # no all-zero rows — any component abs > EPS
+        assert (item.x.abs() > EPS).any(dim=-1).all(), \
+            "Zero-padded row not filtered"
+
+
+def test_dataset_fourmomenta_dtype():
+    ds = TopTaggingDataset(rescale_data=False)
+    ds.load_data(str(DATA_PATH), "train")
+    assert ds[0].x.dtype == torch.float32
