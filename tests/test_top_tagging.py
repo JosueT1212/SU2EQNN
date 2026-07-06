@@ -189,3 +189,84 @@ def test_embed_tagging_data_batch_indices():
     batch = result["batch"]
     assert (batch[:5] == 0).all()  # first 5 tokens belong to jet 0
     assert (batch[5:] == 1).all()  # last 4 tokens belong to jet 1
+
+
+# ---------------------------------------------------------------------------
+# Task 5: Wrapper
+# ---------------------------------------------------------------------------
+
+from experiments.top_tagging.wrapper import build_attention_mask, TopTaggingWrapper
+from su2eqnn.nets.gatr import GATr
+from su2eqnn.layers.attention.config import SelfAttentionConfig
+from su2eqnn.layers.mlp.config import MLPConfig
+
+
+def _make_tiny_net():
+    return GATr(
+        in_mv_channels=1,
+        out_mv_channels=1,
+        hidden_mv_channels=4,
+        in_s_channels=None,
+        out_s_channels=None,
+        hidden_s_channels=None,
+        attention=SelfAttentionConfig(num_heads=2),
+        mlp=MLPConfig(activation="gelu"),
+        num_blocks=2,
+    )
+
+
+def test_build_attention_mask_shape():
+    batch = torch.tensor([0, 0, 0, 1, 1])
+    mask = build_attention_mask(batch, torch.float32)
+    assert mask.shape == (5, 5)
+
+
+def test_build_attention_mask_within_jet_zero():
+    batch = torch.tensor([0, 0, 0, 1, 1])
+    mask = build_attention_mask(batch, torch.float32)
+    # within jet 0: rows/cols 0-2
+    assert (mask[:3, :3] == 0.0).all()
+    # within jet 1: rows/cols 3-4
+    assert (mask[3:, 3:] == 0.0).all()
+
+
+def test_build_attention_mask_cross_jet_neginf():
+    batch = torch.tensor([0, 0, 0, 1, 1])
+    mask = build_attention_mask(batch, torch.float32)
+    assert (mask[:3, 3:] == float("-inf")).all()
+    assert (mask[3:, :3] == float("-inf")).all()
+
+
+def test_wrapper_output_shape():
+    net = _make_tiny_net()
+    wrapper = TopTaggingWrapper(net)
+    # 2 jets: jet0 has 3 tokens, jet1 has 2 tokens
+    mv = torch.randn(5, 1, 8)
+    batch = torch.tensor([0, 0, 0, 1, 1])
+    is_beam = torch.zeros(5, dtype=torch.bool)
+    logits = wrapper({"mv": mv, "batch": batch, "is_beam": is_beam})
+    assert logits.shape == (2, 1)
+
+
+def test_wrapper_output_dtype():
+    net = _make_tiny_net()
+    wrapper = TopTaggingWrapper(net)
+    mv = torch.randn(5, 1, 8)
+    batch = torch.tensor([0, 0, 0, 1, 1])
+    is_beam = torch.zeros(5, dtype=torch.bool)
+    logits = wrapper({"mv": mv, "batch": batch, "is_beam": is_beam})
+    assert logits.dtype == torch.float32
+
+
+def test_wrapper_gradient_flows():
+    net = _make_tiny_net()
+    wrapper = TopTaggingWrapper(net)
+    mv = torch.randn(5, 1, 8)
+    batch = torch.tensor([0, 0, 0, 1, 1])
+    is_beam = torch.zeros(5, dtype=torch.bool)
+    logits = wrapper({"mv": mv, "batch": batch, "is_beam": is_beam})
+    loss = logits.sum()
+    loss.backward()
+    # at least one parameter should have gradient
+    has_grad = any(p.grad is not None for p in net.parameters())
+    assert has_grad
