@@ -618,6 +618,71 @@ def test_gatr_equivariance():
             f"GATr scalar invariance failed: {(path1_s - out_s).abs().max():.2e}"
 
 
+def test_embed_tagging_data_axes_channels():
+    """5-channel embedding: channel 0 = (E,p), channels 1..4 = pure wedges."""
+    from experiments.top_tagging.embedding import embed_tagging_data, UNITS
+
+    fourmomenta = torch.tensor([
+        [40.0, 3.0, 0.0, 4.0],
+        [10.0, 0.0, 1.0, 2.0],
+        [20.0, 1.0, 1.0, 5.0],
+    ])
+    ptr = torch.tensor([0, 2, 3])           # jet0 = 2 particles, jet1 = 1
+    axes = torch.zeros(2, 4, 3)
+    axes[:, :, 2] = 1.0                     # all axes = +z for easy checking
+
+    out = embed_tagging_data(fourmomenta, ptr, two_beams=True, rescale=True, axes=axes)
+    mv = out["mv"]
+    assert mv.shape[1] == 5, f"expected 5 channels, got {mv.shape[1]}"
+
+    particles = mv[~out["is_beam"]]         # (3, 5, 8)
+    p = fourmomenta / UNITS
+    # channel 0: E, px, py, pz in slots 0..3; grade-2 empty
+    assert torch.allclose(particles[:, 0, 0], p[:, 0], atol=1e-6)
+    assert torch.allclose(particles[:, 0, 1:4], p[:, 1:4], atol=1e-6)
+    assert particles[:, 0, 4:7].abs().max() < 1e-6
+    # channels 1..4 with n̂ = +z: wedge = (p1*0−p2*0)e12 + (p1*1−p3*0)e13 + (p2*1−p3*0)e23
+    #   e12 (idx4) = 0, e13 (idx5) = px, e23 (idx6) = py
+    for k in range(1, 5):
+        assert particles[:, k, 4].abs().max() < 1e-6
+        assert torch.allclose(particles[:, k, 5], p[:, 1], atol=1e-6)
+        assert torch.allclose(particles[:, k, 6], p[:, 2], atol=1e-6)
+        assert particles[:, k, 0:4].abs().max() < 1e-6, "wedge channels must be pure grade-2"
+        assert particles[:, k, 7].abs().max() < 1e-6
+    # spurion tokens: zeros in channels >= 1
+    beams = mv[out["is_beam"]]
+    assert beams[:, 1:].abs().max() < 1e-6
+
+
+def test_embed_tagging_data_axes_equivariance():
+    """Rotating momenta AND axes rotates every embedded channel by ρ(w)."""
+    from experiments.top_tagging.embedding import embed_tagging_data
+    from su2eqnn.interface.vector import embed_vector, extract_vector
+
+    def rotate3(w, v):
+        """Rotate 3-vectors (n,3) via the Spin(3) sandwich on grade-1."""
+        return torch.stack([extract_vector(spin3_action(w, embed_vector(v[i])))
+                            for i in range(v.shape[0])])
+
+    for _ in range(10):
+        fourmomenta = torch.randn(6, 4)
+        ptr = torch.tensor([0, 3, 6])
+        axes = torch.randn(2, 4, 3)
+        axes = axes / axes.norm(dim=-1, keepdim=True)
+        w = random_spin3()
+
+        out = embed_tagging_data(fourmomenta, ptr, two_beams=False, rescale=False, axes=axes)
+
+        rot_p = fourmomenta.clone()
+        rot_p[:, 1:4] = rotate3(w, fourmomenta[:, 1:4])
+        rot_axes = torch.stack([rotate3(w, axes[j]) for j in range(axes.shape[0])])
+        out_rot = embed_tagging_data(rot_p, ptr, two_beams=False, rescale=False, axes=rot_axes)
+
+        expected = spin3_action_channels(w, out["mv"])
+        assert torch.allclose(out_rot["mv"], expected, atol=1e-4), \
+            f"embedding equivariance failed: {(out_rot['mv'] - expected).abs().max():.2e}"
+
+
 if __name__ == "__main__":
     test_spin3_inverse()
     test_spin3_norm_preservation()
