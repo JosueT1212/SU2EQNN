@@ -49,6 +49,10 @@ def exclusive_kt_axes(
     (n_subjets, 3) unit axes, sorted by subjet pT descending. If the jet has
     fewer real constituents than n_subjets, missing rows are filled with the
     jet axis.
+
+    Note: the eta-phi kT metric is beam-frame dependent — resulting axes are
+    equivariant only under azimuthal rotations about the beam axis, matching
+    the symmetry breaking of the beam spurions.
     """
     nj = jet_axis(kinematics)
     mask = np.abs(kinematics).max(axis=-1) > EPS

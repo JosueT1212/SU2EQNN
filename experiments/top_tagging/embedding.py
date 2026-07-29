@@ -77,6 +77,10 @@ def embed_tagging_data(
     mv[:, 0, 3] = fourmomenta[:, 3]  # pz → e3
 
     if axes is not None:
+        if axes.shape[0] != batchsize:
+            raise ValueError(
+                f"axes batch size {axes.shape[0]} != number of jets {batchsize}"
+            )
         # per-particle jet index (pre-spurion): (n_particles,)
         particle_batch = get_batch_from_ptr(ptr)
         ax = axes.to(fourmomenta.dtype)[particle_batch]     # (n_particles, K, 3)
