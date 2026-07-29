@@ -105,6 +105,31 @@ def test_dataset_fourmomenta_dtype():
     assert ds[0].x.dtype == torch.float32
 
 
+def test_dataset_loads_axes(tmp_path):
+    """Data objects carry per-jet axes (1,4,3) when npz contains axes_{mode}."""
+    import numpy as np
+    import torch
+    from experiments.top_tagging.dataset import TopTaggingDataset
+
+    n_jets = 3
+    kin = np.zeros((n_jets, 10, 4), dtype=np.float32)
+    kin[:, 0] = [10.0, 1.0, 0.0, 9.0]
+    kin[:, 1] = [10.0, -1.0, 0.5, 9.0]
+    labels = np.array([True, False, True])
+    axes = np.tile(np.eye(3, dtype=np.float32)[None, :3], (n_jets, 1, 1))
+    axes = np.concatenate([axes, axes[:, :1]], axis=1)   # (n_jets, 4, 3)
+
+    path = tmp_path / "mini_axes.npz"
+    np.savez(path, kinematics_train=kin, labels_train=labels, axes_train=axes)
+
+    ds = TopTaggingDataset(rescale_data=True)
+    ds.load_data(str(path), "train")
+    d = ds[0]
+    assert hasattr(d, "axes")
+    assert d.axes.shape == (1, 4, 3)
+    assert torch.allclose(d.axes[0], torch.tensor(axes[0]))
+
+
 # ---------------------------------------------------------------------------
 # Task 4: Embedding
 # ---------------------------------------------------------------------------

@@ -36,6 +36,10 @@ class TopTaggingDataset(torch.utils.data.Dataset):
         raw = np.load(filename)
         kinematics = torch.tensor(raw[f"kinematics_{mode}"], dtype=dtype)
         labels = torch.tensor(raw[f"labels_{mode}"], dtype=torch.bool)
+        axes_key = f"axes_{mode}"
+        axes = (
+            torch.tensor(raw[axes_key], dtype=dtype) if axes_key in raw.files else None
+        )
 
         self.data_list = []
         for i in range(kinematics.shape[0]):
@@ -43,7 +47,10 @@ class TopTaggingDataset(torch.utils.data.Dataset):
             mask = (kinematics[i].abs() > EPS).any(dim=-1)
             fourmomenta = kinematics[i][mask]   # (n_real, 4)
             label = labels[i]                    # scalar bool
-            self.data_list.append(Data(x=fourmomenta, label=label))
+            data = Data(x=fourmomenta, label=label)
+            if axes is not None:
+                data.axes = axes[i].unsqueeze(0)   # (1, 4, 3)
+            self.data_list.append(data)
 
     def __len__(self):
         return len(self.data_list)
