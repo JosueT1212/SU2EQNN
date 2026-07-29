@@ -679,8 +679,14 @@ def test_embed_tagging_data_axes_equivariance():
         out_rot = embed_tagging_data(rot_p, ptr, two_beams=False, rescale=False, axes=rot_axes)
 
         expected = spin3_action_channels(w, out["mv"])
-        assert torch.allclose(out_rot["mv"], expected, atol=1e-4), \
-            f"embedding equivariance failed: {(out_rot['mv'] - expected).abs().max():.2e}"
+        # Beam spurion tokens are fixed lab-frame directions (unaffected by
+        # rotating fourmomenta/axes) and are therefore not equivariant under
+        # a general Spin(3) rotation by construction -- only particle tokens
+        # are expected to satisfy the equivariance check here. `is_beam` is
+        # identical between `out` and `out_rot` (same ptr, same two_beams).
+        mask = ~out["is_beam"]
+        assert torch.allclose(out_rot["mv"][mask], expected[mask], atol=1e-4), \
+            f"embedding equivariance failed: {(out_rot['mv'][mask] - expected[mask]).abs().max():.2e}"
 
 
 if __name__ == "__main__":
