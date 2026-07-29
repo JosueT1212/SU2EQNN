@@ -35,9 +35,10 @@ def build_model(cfg) -> TopTaggingWrapper:
         hidden_mv_channels : int
         num_blocks         : int
         num_heads          : int
+        in_mv_channels     : int (optional, default 1)
     """
     net = GATr(
-        in_mv_channels=1,
+        in_mv_channels=getattr(cfg.model, "in_mv_channels", 1),
         out_mv_channels=1,
         hidden_mv_channels=cfg.model.hidden_mv_channels,
         in_s_channels=None,
@@ -61,6 +62,7 @@ def evaluate(model, loader, cfg, device):
                 batch.x, batch.ptr,
                 two_beams=cfg.data.two_beams,
                 rescale=cfg.data.rescale_data,
+                axes=getattr(batch, "axes", None),
             )
             logits = model(embedding)  # (B, 1)
             all_logits.append(logits.cpu())
@@ -119,6 +121,7 @@ def run_experiment(cfg: DictConfig) -> None:
                 batch.x, batch.ptr,
                 two_beams=cfg.data.two_beams,
                 rescale=cfg.data.rescale_data,
+                axes=getattr(batch, "axes", None),
             )
             logits = model(embedding)              # (B, 1)
             targets = batch.label.float().unsqueeze(1)  # (B, 1)
