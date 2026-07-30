@@ -100,7 +100,21 @@ def run_experiment(cfg: DictConfig) -> None:
     n_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
     log.info(f"Model parameters: {n_params:,}")
 
-    optimizer = torch.optim.Adam(model.parameters(), lr=cfg.training.lr)
+    optimizer_name = str(getattr(cfg.training, "optimizer", "adam")).lower()
+    if optimizer_name == "lion":
+        from lion_pytorch import Lion
+
+        optimizer = Lion(
+            model.parameters(),
+            lr=cfg.training.lr,
+            weight_decay=float(getattr(cfg.training, "weight_decay", 0.0)),
+        )
+        log.info(
+            f"Using Lion optimizer: lr={cfg.training.lr}, "
+            f"weight_decay={getattr(cfg.training, 'weight_decay', 0.0)}"
+        )
+    else:
+        optimizer = torch.optim.Adam(model.parameters(), lr=cfg.training.lr)
     scheduler = None
     if getattr(cfg.training, "scheduler", None) == "cosine_warm_restarts":
         scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(
