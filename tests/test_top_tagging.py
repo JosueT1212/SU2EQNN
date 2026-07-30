@@ -354,3 +354,21 @@ def test_smoke_one_training_step():
     # parameters changed after optimizer step
     p0 = next(model.parameters())
     assert p0.grad is not None
+
+
+def test_warm_restart_scheduler_resets_lr():
+    """CosineAnnealingWarmRestarts: LR decays within a cycle, resets at T_0."""
+    import torch
+
+    param = torch.nn.Parameter(torch.zeros(1))
+    opt = torch.optim.Adam([param], lr=1.0e-3)
+    sched = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(
+        opt, T_0=10, T_mult=1, eta_min=1.0e-5
+    )
+    lrs = []
+    for _ in range(20):
+        opt.step()
+        sched.step()
+        lrs.append(opt.param_groups[0]["lr"])
+    assert lrs[8] < 1.0e-4, f"LR should be near eta_min before restart, got {lrs[8]}"
+    assert lrs[9] > 9.0e-4, f"LR should reset to ~initial at T_0, got {lrs[9]}"

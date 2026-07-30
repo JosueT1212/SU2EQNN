@@ -20,7 +20,7 @@ from su2eqnn.nets.gatr import GATr
 from su2eqnn.layers.attention.config import SelfAttentionConfig
 from su2eqnn.layers.mlp.config import MLPConfig
 from experiments.top_tagging.dataset import TopTaggingDataset
-from experiments.top_tagging.embedding import embed_tagging_data
+from experiments.top_tagging.embedding import embed_tagging_data, apply_axis_channel_dropout
 from experiments.top_tagging.wrapper import TopTaggingWrapper
 
 log = logging.getLogger(__name__)
@@ -101,6 +101,19 @@ def run_experiment(cfg: DictConfig) -> None:
     log.info(f"Model parameters: {n_params:,}")
 
     optimizer = torch.optim.Adam(model.parameters(), lr=cfg.training.lr)
+    scheduler = None
+    if getattr(cfg.training, "scheduler", None) == "cosine_warm_restarts":
+        scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(
+            optimizer,
+            T_0=cfg.training.scheduler_t0_steps,
+            T_mult=1,
+            eta_min=cfg.training.eta_min,
+        )
+        log.info(
+            f"Using CosineAnnealingWarmRestarts: T_0={cfg.training.scheduler_t0_steps} "
+            f"steps, eta_min={cfg.training.eta_min}"
+        )
+    axis_dropout_p = float(getattr(cfg.training, "axis_dropout_p", 0.0))
     criterion = torch.nn.BCEWithLogitsLoss()
 
     best_auc = 0.0
@@ -123,6 +136,8 @@ def run_experiment(cfg: DictConfig) -> None:
                 rescale=cfg.data.rescale_data,
                 axes=getattr(batch, "axes", None),
             )
+            if axis_dropout_p > 0.0:
+                embedding = apply_axis_channel_dropout(embedding, axis_dropout_p)
             logits = model(embedding)              # (B, 1)
             targets = batch.label.float().unsqueeze(1)  # (B, 1)
             loss = criterion(logits, targets)
@@ -130,6 +145,8 @@ def run_experiment(cfg: DictConfig) -> None:
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
+            if scheduler is not None:
+                scheduler.step()
 
             epoch_loss += loss.item()
             global_step += 1
