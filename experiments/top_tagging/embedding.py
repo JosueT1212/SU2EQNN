@@ -126,3 +126,36 @@ def embed_tagging_data(
     batch = get_batch_from_ptr(ptr_out)
 
     return {"mv": mv_out, "batch": batch, "is_beam": is_beam}
+
+
+def apply_axis_channel_dropout(embedding: dict, p: float) -> dict:
+    """Zero each axis channel (1..C-1) independently per jet with prob p.
+
+    Training-time only (caller's responsibility). Channel 0 is never touched.
+    Beam tokens already carry zeros in channels >= 1, so masking every token
+    by its jet index is safe. No 1/(1-p) rescaling — ModDrop convention: a
+    modality is present or absent, and bivector magnitudes are physical.
+    Equivariance is preserved: zeroing a channel commutes with the rotor
+    action (w · 0 · w^{-1} = 0).
+
+    Parameters
+    ----------
+    embedding : dict with keys "mv" (n_total, C, 8) and "batch" (n_total,)
+                as returned by embed_tagging_data
+    p         : float — per-jet, per-channel drop probability
+
+    Returns
+    -------
+    The same dict, with embedding["mv"] masked in place.
+    """
+    mv = embedding["mv"]
+    n_axis_channels = mv.shape[1] - 1
+    if p <= 0.0 or n_axis_channels == 0:
+        return embedding
+    batch = embedding["batch"]
+    n_jets = int(batch.max().item()) + 1
+    keep = (
+        torch.rand(n_jets, n_axis_channels, device=mv.device) >= p
+    ).to(mv.dtype)                                     # (B, C-1)
+    mv[:, 1:, :] = mv[:, 1:, :] * keep[batch][:, :, None]
+    return embedding

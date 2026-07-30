@@ -689,6 +689,51 @@ def test_embed_tagging_data_axes_equivariance():
             f"embedding equivariance failed: {(out_rot['mv'][mask] - expected[mask]).abs().max():.2e}"
 
 
+def test_apply_axis_channel_dropout():
+    """Per-jet per-axis dropout: channel 0 intact, mask constant within a jet."""
+    from experiments.top_tagging.embedding import (
+        embed_tagging_data,
+        apply_axis_channel_dropout,
+    )
+
+    fourmomenta = torch.randn(8, 4)
+    ptr = torch.tensor([0, 5, 8])
+    axes = torch.randn(2, 4, 3)
+    axes = axes / axes.norm(dim=-1, keepdim=True)
+
+    def fresh():
+        return embed_tagging_data(
+            fourmomenta, ptr, two_beams=True, rescale=False, axes=axes
+        )
+
+    # p=0 → identity
+    out = fresh()
+    before = out["mv"].clone()
+    apply_axis_channel_dropout(out, p=0.0)
+    assert torch.equal(out["mv"], before)
+
+    # p=1 → all axis channels zero, channel 0 untouched
+    out = fresh()
+    ch0_before = out["mv"][:, 0, :].clone()
+    apply_axis_channel_dropout(out, p=1.0)
+    assert out["mv"][:, 1:, :].abs().max() == 0.0
+    assert torch.equal(out["mv"][:, 0, :], ch0_before)
+
+    # 0<p<1 → mask constant within each jet: for every jet and channel,
+    # the channel is either fully zeroed or fully identical to the original
+    torch.manual_seed(0)
+    out = fresh()
+    orig = fresh()["mv"]
+    apply_axis_channel_dropout(out, p=0.5)
+    batch = out["batch"]
+    for j in range(2):
+        jet_tokens = batch == j
+        for c in range(1, out["mv"].shape[1]):
+            dropped = out["mv"][jet_tokens, c, :].abs().max() == 0.0
+            kept = torch.equal(out["mv"][jet_tokens, c, :], orig[jet_tokens, c, :])
+            assert dropped or kept, f"jet {j} channel {c}: partial drop"
+
+
 if __name__ == "__main__":
     test_spin3_inverse()
     test_spin3_norm_preservation()
