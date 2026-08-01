@@ -734,6 +734,44 @@ def test_apply_axis_channel_dropout():
             assert dropped or kept, f"jet {j} channel {c}: partial drop"
 
 
+def test_pseudoscalar_det_triad_channels():
+    """WT-A: slot 7 carries triad (ch1, broadcast) and dets (ch2-4); parity-odd."""
+    from experiments.top_tagging.embedding import embed_tagging_data
+
+    fourmomenta = torch.tensor([
+        [10.0, 2.0, 0.0, 1.0],
+        [10.0, 0.0, 3.0, 1.0],
+    ])
+    ptr = torch.tensor([0, 2])
+    axes = torch.zeros(1, 4, 3)
+    axes[0, 0] = torch.tensor([0.0, 0.0, 1.0])   # n_jet = z
+    axes[0, 1] = torch.tensor([1.0, 0.0, 0.0])   # s1 = x
+    axes[0, 2] = torch.tensor([0.0, 1.0, 0.0])   # s2 = y
+    axes[0, 3] = torch.tensor([0.0, 0.0, 1.0])   # s3 = z
+
+    out = embed_tagging_data(fourmomenta, ptr, two_beams=False, rescale=False, axes=axes)
+    parts = out["mv"][~out["is_beam"]]
+
+    # chi_triad = (x × y) · z = 1, broadcast on channel 1 for both particles
+    assert torch.allclose(parts[:, 1, 7], torch.tensor([1.0, 1.0]), atol=1e-6)
+    # channel 2: det(p, n_jet=z, s1=x) = p·(z×x) = p·y = py
+    assert torch.allclose(parts[:, 2, 7], fourmomenta[:, 2], atol=1e-6)
+    # channel 3: det(p, z, y) = p·(z×y) = p·(-x) = -px
+    assert torch.allclose(parts[:, 3, 7], -fourmomenta[:, 1], atol=1e-6)
+    # channel 4: det(p, z, z) = 0
+    assert parts[:, 4, 7].abs().max() < 1e-6
+    # channel 0 slot 7 untouched
+    assert parts[:, 0, 7].abs().max() < 1e-6
+
+    # parity: mirror all inputs -> every slot-7 value flips sign
+    out_m = embed_tagging_data(
+        torch.cat([fourmomenta[:, :1], -fourmomenta[:, 1:]], dim=1),
+        ptr, two_beams=False, rescale=False, axes=-axes,
+    )
+    parts_m = out_m["mv"][~out_m["is_beam"]]
+    assert torch.allclose(parts_m[:, 1:, 7], -parts[:, 1:, 7], atol=1e-6)
+
+
 if __name__ == "__main__":
     test_spin3_inverse()
     test_spin3_norm_preservation()

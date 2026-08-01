@@ -83,12 +83,25 @@ def embed_tagging_data(
             )
         # per-particle jet index (pre-spurion): (n_particles,)
         particle_batch = get_batch_from_ptr(ptr)
-        ax = axes.to(fourmomenta.dtype)[particle_batch]     # (n_particles, K, 3)
+        axes_f = axes.to(fourmomenta.dtype)                 # (B, K, 3)
+        ax = axes_f[particle_batch]                         # (n_particles, K, 3)
         p = fourmomenta[:, 1:4].unsqueeze(1)                # (n_particles, 1, 3)
         # wedge p∧n in repo layout: idx4 = e12, idx5 = e13, idx6 = e23
         mv[:, 1:, 4] = p[..., 0] * ax[..., 1] - p[..., 1] * ax[..., 0]
         mv[:, 1:, 5] = p[..., 0] * ax[..., 2] - p[..., 2] * ax[..., 0]
         mv[:, 1:, 6] = p[..., 1] * ax[..., 2] - p[..., 2] * ax[..., 1]
+
+        # R5a pseudoscalar slots: jet-level triad handedness (channel 1, broadcast)
+        # and per-particle signed volumes with jet+subjet axes (channels 2..K).
+        # chi_triad is pure-axes (O(1), unit vectors) and is not rescaled.
+        n_jet = axes_f[:, 0]                                     # (B, 3)
+        subs = axes_f[:, 1:]                                     # (B, K-1, 3)
+        chi_triad = (torch.cross(subs[:, 0], subs[:, 1], dim=-1) * subs[:, 2]).sum(-1)
+        mv[:, 1, 7] = chi_triad[particle_batch]
+        cross_jk = torch.cross(n_jet.unsqueeze(1).expand_as(subs), subs, dim=-1)
+        mv[:, 2:, 7] = torch.einsum(
+            "nd,nkd->nk", fourmomenta[:, 1:4], cross_jk[particle_batch]
+        )
 
     # Get beam spurions: (n_spurions, 1, 8) → zero-padded to C channels
     spurions = embed_spurions(
