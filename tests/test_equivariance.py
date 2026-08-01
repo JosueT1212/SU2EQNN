@@ -789,6 +789,53 @@ def test_pseudoscalar_handedness_channels():
     assert parts_s[:, 1:, 7].abs().max() < 1e-6
 
 
+def test_pseudoscalar_handedness_three_particle_weighting():
+    """3-particle jet: pins the |p_j|/|p_i-p_j| weighting with non-trivial
+    (non-unity) normalized weights, so a numerator/denominator index-swap
+    bug (e.g. |p_i| instead of |p_j|) cannot pass silently the way it would
+    with a 2-particle fixture (where row-normalization always forces w=1
+    regardless of the formula)."""
+    from experiments.top_tagging.embedding import embed_tagging_data
+
+    # distinct |p| and distinct pairwise separations for all three particles
+    p1_3 = torch.tensor([1.0, 0.0, 0.0])   # |p1| = 1
+    p2_3 = torch.tensor([0.0, 2.0, 0.0])   # |p2| = 2
+    p3_3 = torch.tensor([0.0, 0.0, 3.0])   # |p3| = 3
+    # pairwise |p_i-p_j|: d12=sqrt(5)~2.236, d13=sqrt(10)~3.162, d23=sqrt(13)~3.606
+    # all distinct from each other and from |p1|,|p2|,|p3| -> no accidental
+    # weight ties that could mask an index-swap bug.
+
+    E = 100.0  # arbitrary, unused by the weighting (only p3 slots matter)
+    fourmomenta = torch.stack([
+        torch.cat([torch.tensor([E]), p1_3]),
+        torch.cat([torch.tensor([E]), p2_3]),
+        torch.cat([torch.tensor([E]), p3_3]),
+    ])
+    ptr = torch.tensor([0, 3])
+    axes = torch.zeros(1, 4, 3)
+    axes[0, 0] = torch.tensor([0.0, 0.0, 1.0])
+    axes[0, 1] = torch.tensor([1.0, 0.0, 0.0])
+    axes[0, 2] = torch.tensor([0.0, 1.0, 0.0])
+    axes[0, 3] = torch.tensor([0.0, 0.0, 1.0])
+
+    out = embed_tagging_data(fourmomenta, ptr, two_beams=False, rescale=False, axes=axes)
+    parts = out["mv"][~out["is_beam"]]
+
+    # hand-derive v_1 for particle 0 (neighbors j=1,2): normalized weights
+    # w_1j = |p_j| / |p1-p_j|, NOT |p1| / |p1-p_j| -- catches a numerator
+    # index-swap bug.
+    w12 = p2_3.norm() / (p1_3 - p2_3).norm()
+    w13 = p3_3.norm() / (p1_3 - p3_3).norm()
+    assert not torch.allclose(w12, w13), "weights must differ (non-trivial normalization)"
+    wsum = w12 + w13
+    v1 = (w12 * p2_3 + w13 * p3_3) / wsum
+    cross1 = torch.linalg.cross(p1_3, v1)
+
+    for k, n_hat in enumerate([axes[0, 0], axes[0, 1], axes[0, 2], axes[0, 3]], start=1):
+        chi1 = torch.dot(n_hat, cross1)
+        assert torch.allclose(parts[0, k, 7], chi1, atol=1e-4), f"ch{k} p1"
+
+
 if __name__ == "__main__":
     test_spin3_inverse()
     test_spin3_norm_preservation()
@@ -817,4 +864,5 @@ if __name__ == "__main__":
     test_gatr_block_no_scalars_equivariance()
     test_gatr_equivariance()
     test_pseudoscalar_handedness_channels()
+    test_pseudoscalar_handedness_three_particle_weighting()
     print("All equivariance tests passed.")

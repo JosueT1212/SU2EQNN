@@ -111,6 +111,14 @@ def embed_tagging_data(
         # invariant as required), and avoids the unbounded gradient that an
         # arccos-based opening-angle metric would have for collimated
         # (near-parallel) jet constituents.
+        #
+        # NOTE: the 1e-3 floor below is applied to |p_i-p_j| in *rescaled*
+        # momentum space (GeV/UNITS=20 units, when rescale=True), not to an
+        # eta-phi DeltaR. A separation of 1e-3 there corresponds to ~0.02 GeV
+        # of 3-momentum difference -- comfortably below realistic jet
+        # constituent spacing after the /20 rescale, so it only guards the
+        # true coincident-momentum (division-by-zero) edge case and should
+        # not distort weights for physically distinct constituents.
         p3 = fourmomenta[:, 1:4]
         pnorm = p3.norm(dim=-1).clamp_min(1e-12)
         v = torch.zeros_like(p3)
