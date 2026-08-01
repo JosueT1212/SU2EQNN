@@ -648,7 +648,18 @@ def test_embed_tagging_data_axes_channels():
         assert torch.allclose(particles[:, k, 5], p[:, 1], atol=1e-6)
         assert torch.allclose(particles[:, k, 6], p[:, 2], atol=1e-6)
         assert particles[:, k, 0:4].abs().max() < 1e-6, "wedge channels must be pure grade-2"
-        assert particles[:, k, 7].abs().max() < 1e-6
+    # slot 7 (pseudoscalar, R5b): chi_i^(k) = n_k . (p_i x v_i), same for every
+    # k since all four axes are +z here. jet0 has 2 particles -> each is the
+    # other's sole neighbor, so v_i is exactly the other particle's momentum;
+    # jet1 has 1 particle -> no neighbors -> chi = 0.
+    v0, v1 = p[1, 1:4], p[0, 1:4]
+    n_hat = torch.tensor([0.0, 0.0, 1.0])
+    chi0 = torch.dot(n_hat, torch.linalg.cross(p[0, 1:4], v0))
+    chi1 = torch.dot(n_hat, torch.linalg.cross(p[1, 1:4], v1))
+    for k in range(1, 5):
+        assert torch.allclose(particles[0, k, 7], chi0, atol=1e-6)
+        assert torch.allclose(particles[1, k, 7], chi1, atol=1e-6)
+        assert particles[2, k, 7].abs() < 1e-6, "single-particle jet -> chi = 0"
     # spurion tokens: zeros in channels >= 1
     beams = mv[out["is_beam"]]
     assert beams[:, 1:].abs().max() < 1e-6
@@ -734,6 +745,50 @@ def test_apply_axis_channel_dropout():
             assert dropped or kept, f"jet {j} channel {c}: partial drop"
 
 
+def test_pseudoscalar_handedness_channels():
+    """WT-B: slot 7 of channels 1-4 = n̂_k·(p×v), v = pT/ΔR-weighted neighborhood."""
+    from experiments.top_tagging.embedding import embed_tagging_data
+
+    # two-particle jet: v_i is exactly the other particle's momentum (single neighbor)
+    p1 = torch.tensor([10.0, 2.0, 0.0, 5.0])
+    p2 = torch.tensor([10.0, 0.0, 2.0, 5.0])
+    fourmomenta = torch.stack([p1, p2])
+    ptr = torch.tensor([0, 2])
+    axes = torch.zeros(1, 4, 3)
+    axes[0, 0] = torch.tensor([0.0, 0.0, 1.0])   # n_jet = z
+    axes[0, 1] = torch.tensor([1.0, 0.0, 0.0])
+    axes[0, 2] = torch.tensor([0.0, 1.0, 0.0])
+    axes[0, 3] = torch.tensor([0.0, 0.0, 1.0])
+
+    out = embed_tagging_data(fourmomenta, ptr, two_beams=False, rescale=False, axes=axes)
+    parts = out["mv"][~out["is_beam"]]
+
+    # with one neighbor, normalized weights make v_1 = p2_vec, v_2 = p1_vec
+    v1 = p2[1:4]; v2 = p1[1:4]
+    for k, n_hat in enumerate([axes[0, 0], axes[0, 1], axes[0, 2], axes[0, 3]], start=1):
+        chi1 = torch.dot(n_hat, torch.linalg.cross(p1[1:4], v1))
+        chi2 = torch.dot(n_hat, torch.linalg.cross(p2[1:4], v2))
+        assert torch.allclose(parts[0, k, 7], chi1, atol=1e-4), f"ch{k} p1"
+        assert torch.allclose(parts[1, k, 7], chi2, atol=1e-4), f"ch{k} p2"
+    # channel 0 untouched
+    assert parts[:, 0, 7].abs().max() < 1e-6
+
+    # parity flip
+    out_m = embed_tagging_data(
+        torch.cat([fourmomenta[:, :1], -fourmomenta[:, 1:]], dim=1),
+        ptr, two_beams=False, rescale=False, axes=-axes,
+    )
+    parts_m = out_m["mv"][~out_m["is_beam"]]
+    assert torch.allclose(parts_m[:, 1:, 7], -parts[:, 1:, 7], atol=1e-4)
+
+    # single-particle jet: no neighbors -> chi = 0, no NaN
+    out_s = embed_tagging_data(p1.unsqueeze(0), torch.tensor([0, 1]),
+                               two_beams=False, rescale=False, axes=axes)
+    parts_s = out_s["mv"][~out_s["is_beam"]]
+    assert torch.isfinite(parts_s).all()
+    assert parts_s[:, 1:, 7].abs().max() < 1e-6
+
+
 if __name__ == "__main__":
     test_spin3_inverse()
     test_spin3_norm_preservation()
@@ -761,4 +816,5 @@ if __name__ == "__main__":
     test_gatr_block_equivariance()
     test_gatr_block_no_scalars_equivariance()
     test_gatr_equivariance()
+    test_pseudoscalar_handedness_channels()
     print("All equivariance tests passed.")

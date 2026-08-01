@@ -9,6 +9,9 @@ Particle MV layout, channel 0: [E, px, py, pz, 0, 0, 0, 0]
 Optional axis channels 1..K (R4 multi-axis bivector encoding):
   channel 1+k = p⃗ ∧ n̂_k, pure grade-2 at indices 4 (e12), 5 (e13), 6 (e23),
   where n̂_k are per-jet unit reference axes (jet axis + exclusive-kT subjets).
+  Index 7 (pseudoscalar, R5b): chi_i^(k) = n̂_k · (p⃗_i × v⃗_i), an Efremov-style
+  local-handedness scalar, with v⃗_i an intra-jet momentum-weighted neighborhood
+  direction (see embed_tagging_data for details).
 """
 
 import torch
@@ -89,6 +92,40 @@ def embed_tagging_data(
         mv[:, 1:, 4] = p[..., 0] * ax[..., 1] - p[..., 1] * ax[..., 0]
         mv[:, 1:, 5] = p[..., 0] * ax[..., 2] - p[..., 2] * ax[..., 0]
         mv[:, 1:, 6] = p[..., 1] * ax[..., 2] - p[..., 2] * ax[..., 1]
+
+        # R5b pseudoscalar slots: Efremov-style local handedness about each axis.
+        # v_i = normalized sum_{j!=i} (|p_j|/max(|p_i-p_j|,1e-3)) p_j within the
+        # jet; chi_i^(k) = n_k . (p_i x v_i). Neighborhood average (not
+        # nearest-neighbor) for IRC smoothness. O(n^2) per jet.
+        #
+        # NOTE: deviates from the brief's eta/phi-and-pT ("DeltaR") weighting.
+        # eta, phi and DeltaR are only invariant under boosts/rotations about the
+        # beam (z) axis, not under a general Spin(3) rotation -- using them here
+        # made v (and hence chi) fail the full-rotation equivariance test
+        # (test_embed_tagging_data_axes_equivariance uses a random Spin(3), not
+        # just an azimuthal one). Replacing pT with |p| and DeltaR with the
+        # Euclidean momentum separation |p_i-p_j| (the direct SO(3)-invariant
+        # analog of DeltaR) keeps the same "nearby, high-momentum neighbors
+        # dominate" Efremov-style local-handedness idea, makes v a genuinely
+        # SO(3)-equivariant function of the momenta (so chi = n . (p x v) is
+        # invariant as required), and avoids the unbounded gradient that an
+        # arccos-based opening-angle metric would have for collimated
+        # (near-parallel) jet constituents.
+        p3 = fourmomenta[:, 1:4]
+        pnorm = p3.norm(dim=-1).clamp_min(1e-12)
+        v = torch.zeros_like(p3)
+        for j0, j1 in zip(ptr[:-1].tolist(), ptr[1:].tolist()):
+            if j1 - j0 < 2:
+                continue
+            pj = p3[j0:j1]
+            nj = pnorm[j0:j1]
+            dist = torch.cdist(pj, pj)
+            w = nj[None, :] / dist.clamp_min(1e-3)
+            w = w - torch.diag_embed(torch.diagonal(w))          # zero self-weight
+            w = w / w.sum(dim=1, keepdim=True).clamp_min(1e-12)
+            v[j0:j1] = w @ pj
+        cross_pv = torch.linalg.cross(p3, v)                      # (n, 3)
+        mv[:, 1:, 7] = torch.einsum("nkd,nd->nk", ax, cross_pv)
 
     # Get beam spurions: (n_spurions, 1, 8) → zero-padded to C channels
     spurions = embed_spurions(
