@@ -67,3 +67,27 @@ def test_axes_wrapper_unchanged():
         axes_wrapper = exclusive_kt_axes(kin, n_subjets=3, R=0.8)
         axes_direct, _ = exclusive_kt_subjets(kin, n_subjets=3, R=0.8)
         np.testing.assert_array_equal(axes_wrapper, axes_direct)
+
+
+def test_dataset_attaches_masses(tmp_path):
+    import numpy as np
+    import torch
+    from experiments.top_tagging.dataset import TopTaggingDataset
+
+    n_jets, n_part = 3, 5
+    kin = np.zeros((n_jets, n_part, 4), dtype=np.float32)
+    kin[:, :, 0] = 1.0
+    kin[:, :, 1] = 10.0
+    labels = np.zeros(n_jets, dtype=np.int64)
+    base = {}
+    for m in ("train", "val", "test"):
+        base[f"kinematics_{m}"] = kin
+        base[f"labels_{m}"] = labels
+        base[f"masses_{m}"] = np.full((n_jets, 4), 80.0, dtype=np.float32)
+    np.savez(tmp_path / "toy.npz", **base)
+
+    ds = TopTaggingDataset(rescale_data=False)
+    ds.load_data(str(tmp_path / "toy.npz"), "train")
+    assert hasattr(ds[0], "masses")
+    assert ds[0].masses.shape == (1, 4)
+    assert torch.allclose(ds[0].masses, torch.full((1, 4), 80.0))
