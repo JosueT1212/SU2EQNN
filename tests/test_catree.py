@@ -1,5 +1,4 @@
 import numpy as np
-import pytest
 
 from su2eqnn.utils.catree import ca_hard_branch_phases
 
@@ -52,14 +51,17 @@ def test_planar_jet_zero_phases():
     np.testing.assert_allclose(ca_hard_branch_phases(kin), np.zeros(4), atol=1e-6)
 
 
-def test_rotation_invariance():
+def test_azimuthal_rotation_invariance():
+    # Rotate all momenta by a random angle about the z axis (azimuthal rotation).
+    # The tree topology and phases should remain unchanged.
     rng = np.random.default_rng(0)
-    q = np.linalg.qr(rng.normal(size=(3, 3)))[0]
-    if np.linalg.det(q) < 0:
-        q[:, 0] *= -1
+    angle = rng.uniform(0, 2 * np.pi)
+    c, s = np.cos(angle), np.sin(angle)
+    rot_matrix = np.array([[c, -s, 0], [s, c, 0], [0, 0, 1]])
+    
     kin = np.stack([A, B, C, D])
     rot = kin.copy()
-    rot[:, 1:] = kin[:, 1:] @ q.T
+    rot[:, 1:] = kin[:, 1:] @ rot_matrix.T
     np.testing.assert_allclose(
         ca_hard_branch_phases(rot), ca_hard_branch_phases(kin), atol=1e-5
     )

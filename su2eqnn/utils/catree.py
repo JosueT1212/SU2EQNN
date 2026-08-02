@@ -3,8 +3,12 @@
 Physics: PanScales construction (arXiv:2103.16526 Sec 3.2). Each C-A declustering
 defines a splitting plane via the cross product of its two prongs; the SIGNED
 dihedral angle between successive planes carries the cos(2*dpsi) gluon-helicity
-interference modulation. sin(2*dpsi) is parity-odd and rotation-invariant ->
-legitimate pseudoscalar (grade-3) input.
+interference modulation. sin(2*dpsi) is parity-odd; invariant under azimuthal
+rotations about the beam axis (and, for a FIXED clustering tree, under all rotations
+via the cross-product construction). The C-A tree itself uses the beam-frame η-φ
+metric, so full SO(3) invariance is broken the same way as the kT subjet axes
+(residual SO(2), same breaking as beam spurions) -> legitimate pseudoscalar (grade-3)
+input under this beam-frame convention.
 """
 
 import numpy as np
