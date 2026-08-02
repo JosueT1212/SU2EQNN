@@ -1,0 +1,2 @@
+- data.path=data/toptagging_mini_axes_phases.npz
+- training.checkpoint_path=checkpoints/r5c_best.pt

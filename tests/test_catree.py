@@ -35,7 +35,7 @@ def _expected_phases():
     hd3 = B[1:] / np.linalg.norm(B[1:])
     dpsi1 = np.arctan2(np.dot(np.cross(n1, n2), hd2), np.dot(n1, n2))
     dpsi2 = np.arctan2(np.dot(np.cross(n2, n3), hd3), np.dot(n2, n3))
-    return np.array([np.sin(2 * dpsi1), np.sin(2 * dpsi2), 0.0, 0.0], dtype=np.float32)
+    return np.array([np.sin(dpsi1), np.sin(dpsi2), 0.0, 0.0], dtype=np.float32)
 
 
 def test_hand_built_tree_phases():
@@ -46,7 +46,7 @@ def test_hand_built_tree_phases():
 
 
 def test_planar_jet_zero_phases():
-    # All momenta in the xz plane -> every normal is +-y_hat -> sin(2*dpsi)=0.
+    # All momenta in the xz plane -> dpsi = 0 or pi -> sin(dpsi)=0.
     kin = np.stack([_mk(100, 0, 0), _mk(90, 0, 3), _mk(70, 0, -8), _mk(40, 0, 15)])
     np.testing.assert_allclose(ca_hard_branch_phases(kin), np.zeros(4), atol=1e-6)
 

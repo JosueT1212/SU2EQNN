@@ -3,7 +3,14 @@
 Physics: PanScales construction (arXiv:2103.16526 Sec 3.2). Each C-A declustering
 defines a splitting plane via the cross product of its two prongs; the SIGNED
 dihedral angle between successive planes carries the cos(2*dpsi) gluon-helicity
-interference modulation. sin(2*dpsi) is parity-odd; invariant under azimuthal
+interference modulation. FEATURE = sin(dpsi) (NOT sin(2*dpsi)): with the measured
+distribution 1/sigma dsigma/ddpsi = a0 + a2*cos(2*dpsi) (arXiv:2111.01161 Eq. 4.4),
+harmonic orthogonality gives <sin^2(2*dpsi)> = 1/2 exactly (all moments of
+sin(2*dpsi) involve only the absent harmonics 4,8,...), while
+<sin^2(dpsi)> = (1 - a2/2a0)/2 is linear in the measured a2 -- so only sin(dpsi)
+lets a bilinear (slot7 x slot7) recover the signal. Caveat: sin(dpsi) flips sign
+under the harder/softer normal-orientation convention (pT-degenerate prongs ->
+noise, not bias). sin(dpsi) is parity-odd; invariant under azimuthal
 rotations about the beam axis (and, for a FIXED clustering tree, under all rotations
 via the cross-product construction). The C-A tree itself uses the beam-frame η-φ
 metric, so full SO(3) invariance is broken the same way as the kT subjet axes
@@ -34,7 +41,7 @@ def _delta_r2(pa3, pb3):
 
 
 def ca_hard_branch_phases(kinematics, n_phases=4, R=0.8):
-    """sin(2*dpsi) between successive C-A splitting planes on the hard branch.
+    """sin(dpsi) between successive C-A splitting planes on the hard branch.
 
     Parameters
     ----------
@@ -88,5 +95,5 @@ def ca_hard_branch_phases(kinematics, n_phases=4, R=0.8):
         if n1 is None or n2 is None:
             continue
         dpsi = np.arctan2(np.dot(np.cross(n1, n2), hard_dirs[k + 1]), np.dot(n1, n2))
-        phases[k] = np.sin(2.0 * dpsi)
+        phases[k] = np.sin(dpsi)
     return phases
