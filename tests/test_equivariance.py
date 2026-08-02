@@ -10,6 +10,7 @@ Spin(3) element w lives in Cl^0(3,0) (even subalgebra ≅ quaternions):
 Group action: ρ(w)(x) = w x w^{-1}  (plain conjugation, since w is even)
 """
 
+import pytest
 import torch
 
 from su2eqnn.primitives.bilinear import geometric_product
@@ -732,6 +733,93 @@ def test_apply_axis_channel_dropout():
             dropped = out["mv"][jet_tokens, c, :].abs().max() == 0.0
             kept = torch.equal(out["mv"][jet_tokens, c, :], orig[jet_tokens, c, :])
             assert dropped or kept, f"jet {j} channel {c}: partial drop"
+
+
+def test_phases_fill_slot7_channels_1_to_4():
+    """phases (B,4) broadcast per jet into slot 7 of channels 1..4."""
+    from experiments.top_tagging.embedding import embed_tagging_data
+
+    torch.manual_seed(0)
+    fourmomenta = torch.randn(6, 4).abs() + 1.0
+    ptr = torch.tensor([0, 6])
+    axes = torch.nn.functional.normalize(torch.randn(1, 4, 3), dim=-1)
+    phases = torch.tensor([[0.1, -0.2, 0.3, -0.4]])
+    out = embed_tagging_data(fourmomenta, ptr, two_beams=False, rescale=False,
+                              axes=axes, phases=phases)
+    mv = out["mv"]
+    n_spurions = mv.shape[0] - 6
+    body = mv[n_spurions:]
+    assert torch.allclose(body[:, 1:5, 7], phases[0].expand(6, 4))
+    assert torch.all(body[:, 0, 7] == 0.0)  # channel 0 untouched
+
+
+def test_phases_without_axes_raises():
+    """phases without axes is invalid: channels 1..4 don't exist."""
+    from experiments.top_tagging.embedding import embed_tagging_data
+
+    fourmomenta = torch.randn(4, 4).abs() + 1.0
+    ptr = torch.tensor([0, 4])
+    with pytest.raises(ValueError):
+        embed_tagging_data(fourmomenta, ptr, two_beams=False, rescale=False,
+                            axes=None, phases=torch.zeros(1, 4))
+
+
+def test_phases_none_identical_to_r4():
+    """phases=None (or omitted) must be byte-identical to the R4 embedding."""
+    from experiments.top_tagging.embedding import embed_tagging_data
+
+    torch.manual_seed(1)
+    fourmomenta = torch.randn(5, 4).abs() + 1.0
+    ptr = torch.tensor([0, 5])
+    axes = torch.nn.functional.normalize(torch.randn(1, 4, 3), dim=-1)
+    a = embed_tagging_data(fourmomenta, ptr, two_beams=False, rescale=False, axes=axes)
+    b = embed_tagging_data(fourmomenta, ptr, two_beams=False, rescale=False,
+                            axes=axes, phases=None)
+    assert torch.equal(a["mv"], b["mv"])
+    assert torch.equal(a["batch"], b["batch"])
+    assert torch.equal(a["is_beam"], b["is_beam"])
+
+
+def test_phase_embedding_equivariance():
+    """Phases are rotation-invariant scalars written into slot 7 (pseudoscalar
+    grade e123, which is fixed by the Spin(3) sandwich action). Under a
+    co-rotation of momenta and axes, the full embedding must satisfy the
+    rotor action on channels/slots 0..6, and slot 7 must be UNCHANGED."""
+    from experiments.top_tagging.embedding import embed_tagging_data
+
+    def rotate3(w, v):
+        """Rotate 3-vectors (n,3) via the Spin(3) sandwich on grade-1."""
+        return torch.stack([extract_vector(spin3_action(w, embed_vector(v[i])))
+                            for i in range(v.shape[0])])
+
+    torch.manual_seed(2)
+    for _ in range(10):
+        fourmomenta = torch.randn(6, 4)
+        ptr = torch.tensor([0, 3, 6])
+        axes = torch.randn(2, 4, 3)
+        axes = axes / axes.norm(dim=-1, keepdim=True)
+        phases = torch.randn(2, 4)
+        w = random_spin3()
+
+        out = embed_tagging_data(fourmomenta, ptr, two_beams=False, rescale=False,
+                                  axes=axes, phases=phases)
+
+        rot_p = fourmomenta.clone()
+        rot_p[:, 1:4] = rotate3(w, fourmomenta[:, 1:4])
+        rot_axes = torch.stack([rotate3(w, axes[j]) for j in range(axes.shape[0])])
+        out_rot = embed_tagging_data(rot_p, ptr, two_beams=False, rescale=False,
+                                      axes=rot_axes, phases=phases)
+
+        expected = spin3_action_channels(w, out["mv"])
+        # Beam spurion tokens are fixed lab-frame directions and are not
+        # equivariant under a general rotation by construction (see
+        # test_embed_tagging_data_axes_equivariance); is_beam is identical
+        # between out and out_rot (same ptr, same two_beams).
+        mask = ~out["is_beam"]
+        assert torch.allclose(out_rot["mv"][mask], expected[mask], atol=1e-4), \
+            f"embedding equivariance failed: {(out_rot['mv'][mask] - expected[mask]).abs().max():.2e}"
+        # slot 7 (pseudoscalar) is rotor-invariant: unchanged by the rotation
+        assert torch.allclose(out["mv"][mask][:, :, 7], out_rot["mv"][mask][:, :, 7], atol=1e-6)
 
 
 if __name__ == "__main__":
