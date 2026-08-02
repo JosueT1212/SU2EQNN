@@ -36,19 +36,35 @@ def _eta_phi_pt(p3: np.ndarray):
     return eta, phi, pt
 
 
-def exclusive_kt_axes(
+def _inv_mass(p4: np.ndarray) -> float:
+    """Invariant mass of a four-momentum (E, px, py, pz), clamped at 0."""
+    return float(np.sqrt(max(p4[0] ** 2 - np.dot(p4[1:], p4[1:]), 0.0)))
+
+
+def jet_mass(kinematics: np.ndarray) -> float:
+    """Invariant mass of the sum of all real constituents (padding ignored)."""
+    mask = np.abs(kinematics).max(axis=-1) > EPS
+    if not mask.any():
+        return 0.0
+    return _inv_mass(kinematics[mask].astype(np.float64).sum(axis=0))
+
+
+def exclusive_kt_subjets(
     kinematics: np.ndarray, n_subjets: int = 3, R: float = 0.8
-) -> np.ndarray:
-    """Cluster constituents to exactly `n_subjets` with exclusive kT; return axes.
+):
+    """Cluster constituents to exactly `n_subjets` with exclusive kT; return axes AND masses.
 
     kT distance: d_ij = min(pT_i^2, pT_j^2) * dR_ij^2 / R^2, dR^2 = dEta^2 + dPhi^2.
     Pairs with minimal d_ij are merged (4-momentum sum) until n_subjets remain.
 
+    Also returns m_k = sqrt(max(E^2 - |p|^2, 0)) of each subjet's summed
+    four-momentum.
+
     Returns
     -------
-    (n_subjets, 3) unit axes, sorted by subjet pT descending. If the jet has
-    fewer real constituents than n_subjets, missing rows are filled with the
-    jet axis.
+    (n_subjets, 3) unit axes, (n_subjets,) masses — both sorted by subjet pT
+    descending. If the jet has fewer real constituents than n_subjets,
+    missing rows fall back to the jet axis (axes) and 0.0 (masses).
 
     Note: the eta-phi kT metric is beam-frame dependent — resulting axes are
     equivariant only under azimuthal rotations about the beam axis, matching
@@ -75,8 +91,17 @@ def exclusive_kt_axes(
     p = p[order]
 
     axes = np.tile(nj, (n_subjets, 1))
+    masses = np.zeros(n_subjets)
     for k in range(min(len(p), n_subjets)):
         norm = np.linalg.norm(p[k, 1:4])
         if norm > EPS:
             axes[k] = p[k, 1:4] / norm
-    return axes
+        masses[k] = _inv_mass(p[k])
+    return axes, masses
+
+
+def exclusive_kt_axes(
+    kinematics: np.ndarray, n_subjets: int = 3, R: float = 0.8
+) -> np.ndarray:
+    """Backwards-compatible wrapper: axes only. See exclusive_kt_subjets."""
+    return exclusive_kt_subjets(kinematics, n_subjets=n_subjets, R=R)[0]
