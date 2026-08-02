@@ -10,6 +10,7 @@ Spin(3) element w lives in Cl^0(3,0) (even subalgebra ≅ quaternions):
 Group action: ρ(w)(x) = w x w^{-1}  (plain conjugation, since w is even)
 """
 
+import pytest
 import torch
 
 from su2eqnn.primitives.bilinear import geometric_product
@@ -732,6 +733,132 @@ def test_apply_axis_channel_dropout():
             dropped = out["mv"][jet_tokens, c, :].abs().max() == 0.0
             kept = torch.equal(out["mv"][jet_tokens, c, :], orig[jet_tokens, c, :])
             assert dropped or kept, f"jet {j} channel {c}: partial drop"
+
+
+def test_masses_fill_slot0_channels_1_to_4():
+    """masses (B,4) broadcast into slot 0 of channels 1..4, rescaled by UNITS."""
+    from experiments.top_tagging.embedding import embed_tagging_data, UNITS
+
+    torch.manual_seed(0)
+    fourmomenta = torch.randn(6, 4).abs() + 1.0
+    ptr = torch.tensor([0, 6])
+    axes = torch.randn(1, 4, 3)
+    axes = axes / axes.norm(dim=-1, keepdim=True)
+    masses = torch.tensor([[120.0, 80.0, 15.0, 0.0]])
+
+    out = embed_tagging_data(fourmomenta, ptr, two_beams=False, rescale=True,
+                              axes=axes, masses=masses)
+    out_none = embed_tagging_data(fourmomenta, ptr, two_beams=False, rescale=True,
+                                   axes=axes, masses=None)
+    mv = out["mv"]
+    mv_none = out_none["mv"]
+    particles = mv[~out["is_beam"]]
+    particles_none = mv_none[~out_none["is_beam"]]
+
+    p = fourmomenta / UNITS
+    # channel 0 untouched: E,p present, slot 0 == E (rescaled)
+    assert torch.allclose(particles[:, 0, 0], p[:, 0], atol=1e-6)
+    assert torch.equal(particles[:, 0, :], particles_none[:, 0, :])
+
+    expected_masses = masses[0] / UNITS  # (4,)
+    for k in range(1, 5):
+        # slot 0 == masses/UNITS, broadcast to all 6 particles
+        assert torch.allclose(
+            particles[:, k, 0], expected_masses[k - 1].expand(6), atol=1e-6
+        )
+        # slots 1..3 and 7 unaffected (still zero)
+        assert particles[:, k, 1:4].abs().max() < 1e-6
+        assert particles[:, k, 7].abs().max() < 1e-6
+        # grade-2 wedges (slots 4,5,6) unchanged vs masses=None
+        assert torch.equal(particles[:, k, 4:7], particles_none[:, k, 4:7])
+
+
+def test_masses_without_axes_raises():
+    from experiments.top_tagging.embedding import embed_tagging_data
+
+    fourmomenta = torch.randn(4, 4).abs() + 1.0
+    ptr = torch.tensor([0, 4])
+    with pytest.raises(ValueError):
+        embed_tagging_data(fourmomenta, ptr, two_beams=False, rescale=False,
+                            axes=None, masses=torch.zeros(1, 4))
+
+
+def test_masses_none_identical_to_r4():
+    from experiments.top_tagging.embedding import embed_tagging_data
+
+    torch.manual_seed(1)
+    fourmomenta = torch.randn(5, 4).abs() + 1.0
+    ptr = torch.tensor([0, 5])
+    axes = torch.randn(1, 4, 3)
+    axes = axes / axes.norm(dim=-1, keepdim=True)
+    a = embed_tagging_data(fourmomenta, ptr, two_beams=False, rescale=False, axes=axes)
+    b = embed_tagging_data(fourmomenta, ptr, two_beams=False, rescale=False,
+                            axes=axes, masses=None)
+    assert torch.equal(a["mv"], b["mv"])
+    assert torch.equal(a["batch"], b["batch"])
+    assert torch.equal(a["is_beam"], b["is_beam"])
+
+
+def test_masses_rescale_division():
+    """rescale=True divides masses by UNITS; rescale=False leaves raw."""
+    from experiments.top_tagging.embedding import embed_tagging_data
+
+    fourmomenta = torch.tensor([[100.0, 30.0, 40.0, 0.0]])
+    ptr = torch.tensor([0, 1])
+    axes = torch.zeros(1, 4, 3)
+    axes[:, :, 2] = 1.0
+    masses = torch.tensor([[40.0, 20.0, 10.0, 5.0]])
+    out_r = embed_tagging_data(fourmomenta, ptr, two_beams=False, rescale=True,
+                                axes=axes, masses=masses)
+    out_n = embed_tagging_data(fourmomenta, ptr, two_beams=False, rescale=False,
+                                axes=axes, masses=masses)
+
+    particles_r = out_r["mv"][~out_r["is_beam"]]
+    particles_n = out_n["mv"][~out_n["is_beam"]]
+
+    expected_rescaled = torch.tensor([2.0, 1.0, 0.5, 0.25])
+    expected_raw = torch.tensor([40.0, 20.0, 10.0, 5.0])
+    for k in range(1, 5):
+        assert torch.allclose(particles_r[:, k, 0], expected_rescaled[k - 1:k], atol=1e-6)
+        assert torch.allclose(particles_n[:, k, 0], expected_raw[k - 1:k], atol=1e-6)
+
+
+def test_mass_embedding_equivariance():
+    """masses are rotor-invariant; co-rotation must satisfy the rotor action,
+    with slot 0 of channels 1..4 unchanged by the rotation."""
+    from experiments.top_tagging.embedding import embed_tagging_data
+    from su2eqnn.interface.vector import embed_vector, extract_vector
+
+    def rotate3(w, v):
+        return torch.stack([extract_vector(spin3_action(w, embed_vector(v[i])))
+                            for i in range(v.shape[0])])
+
+    for _ in range(10):
+        fourmomenta = torch.randn(6, 4)
+        ptr = torch.tensor([0, 3, 6])
+        axes = torch.randn(2, 4, 3)
+        axes = axes / axes.norm(dim=-1, keepdim=True)
+        masses = torch.rand(2, 4) * 100.0
+        w = random_spin3()
+
+        out = embed_tagging_data(fourmomenta, ptr, two_beams=False, rescale=False,
+                                  axes=axes, masses=masses)
+
+        rot_p = fourmomenta.clone()
+        rot_p[:, 1:4] = rotate3(w, fourmomenta[:, 1:4])
+        rot_axes = torch.stack([rotate3(w, axes[j]) for j in range(axes.shape[0])])
+        out_rot = embed_tagging_data(rot_p, ptr, two_beams=False, rescale=False,
+                                      axes=rot_axes, masses=masses)
+
+        expected = spin3_action_channels(w, out["mv"])
+        mask = ~out["is_beam"]
+        assert torch.allclose(out_rot["mv"][mask], expected[mask], atol=1e-4), \
+            f"embedding equivariance failed: {(out_rot['mv'][mask] - expected[mask]).abs().max():.2e}"
+
+        # slot 0 of channels 1..4 is mass data, unchanged by rotation
+        assert torch.equal(
+            out["mv"][mask][:, 1:, 0], out_rot["mv"][mask][:, 1:, 0]
+        )
 
 
 if __name__ == "__main__":

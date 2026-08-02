@@ -41,6 +41,7 @@ def embed_tagging_data(
     two_beams: bool = True,
     rescale: bool = True,
     axes: Tensor = None,
+    masses: Tensor = None,
 ) -> dict:
     """Embed sparse 4-momenta as Cl(3,0) MVs and prepend beam spurion tokens.
 
@@ -52,6 +53,9 @@ def embed_tagging_data(
     rescale     : bool — divide fourmomenta by UNITS before embedding
     axes        : Tensor (batchsize, K, 3) or None — per-jet unit reference axes.
                   When given, channels 1..K hold the pure grade-2 wedge p⃗_i ∧ n̂_k.
+    masses      : Tensor (batchsize, 4) or None — [m_jet, m_s1..s3] in GeV,
+                  broadcast per jet into slot 0 of channels 1-4; divided by
+                  UNITS when rescale=True (same convention as momenta).
 
     Returns
     -------
@@ -60,6 +64,9 @@ def embed_tagging_data(
         "batch"   : Tensor (n_total,) — jet index per token
         "is_beam" : Tensor (n_total,) bool — True for beam tokens
     """
+    if masses is not None and axes is None:
+        raise ValueError("mass injection requires axes (channels 1-4 must exist)")
+
     batchsize = len(ptr) - 1
     n_channels = 1 if axes is None else 1 + axes.shape[1]
 
@@ -89,6 +96,12 @@ def embed_tagging_data(
         mv[:, 1:, 4] = p[..., 0] * ax[..., 1] - p[..., 1] * ax[..., 0]
         mv[:, 1:, 5] = p[..., 0] * ax[..., 2] - p[..., 2] * ax[..., 0]
         mv[:, 1:, 6] = p[..., 1] * ax[..., 2] - p[..., 2] * ax[..., 1]
+
+        if masses is not None:
+            masses_f = masses.to(mv.dtype)
+            if rescale:
+                masses_f = masses_f / UNITS
+            mv[:, 1:5, 0] = masses_f[particle_batch]
 
     # Get beam spurions: (n_spurions, 1, 8) → zero-padded to C channels
     spurions = embed_spurions(

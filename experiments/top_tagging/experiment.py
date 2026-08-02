@@ -63,6 +63,7 @@ def evaluate(model, loader, cfg, device):
                 two_beams=cfg.data.two_beams,
                 rescale=cfg.data.rescale_data,
                 axes=getattr(batch, "axes", None),
+                masses=getattr(batch, "masses", None),
             )
             logits = model(embedding)  # (B, 1)
             all_logits.append(logits.cpu())
@@ -149,6 +150,7 @@ def run_experiment(cfg: DictConfig) -> None:
                 two_beams=cfg.data.two_beams,
                 rescale=cfg.data.rescale_data,
                 axes=getattr(batch, "axes", None),
+                masses=getattr(batch, "masses", None),
             )
             if axis_dropout_p > 0.0:
                 embedding = apply_axis_channel_dropout(embedding, axis_dropout_p)
