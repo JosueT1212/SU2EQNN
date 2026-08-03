@@ -80,6 +80,17 @@ def evaluate(model, loader, cfg, device):
 
 def run_experiment(cfg: DictConfig) -> None:
     """Training + evaluation loop."""
+    seed = getattr(cfg.training, "seed", None)
+    if seed is not None:
+        import random
+
+        import numpy as np
+
+        random.seed(seed)
+        np.random.seed(seed)
+        torch.manual_seed(seed)
+        log.info(f"Seeded RNGs with seed={seed}")
+
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     log.info(f"Using device: {device}")
 
