@@ -618,6 +618,115 @@ def test_gatr_equivariance():
             f"GATr scalar invariance failed: {(path1_s - out_s).abs().max():.2e}"
 
 
+
+def test_gatr_patch_mv_none_matches_no_patch():
+    """GATr with patch_mv_channels=None is byte-identical to plain GATr."""
+    from su2eqnn.layers.attention.config import SelfAttentionConfig
+    from su2eqnn.layers.mlp.config import MLPConfig
+    from su2eqnn.nets.gatr import GATr
+
+    ITEMS = 5
+    IN_MV, OUT_MV, HIDDEN_MV = 1, 1, 4
+
+    torch.manual_seed(0)
+    net = GATr(
+        in_mv_channels=IN_MV,
+        out_mv_channels=OUT_MV,
+        hidden_mv_channels=HIDDEN_MV,
+        in_s_channels=None,
+        out_s_channels=None,
+        hidden_s_channels=None,
+        attention=SelfAttentionConfig(num_heads=2, multi_query=True, pos_encoding=False),
+        mlp=MLPConfig(activation="gelu"),
+        num_blocks=2,
+    )
+    net.eval()
+    assert net.patch_proj is None
+
+    x_mv = torch.randn(BATCH, ITEMS, IN_MV, 8)
+    out_mv_a, out_s_a = net(x_mv, scalars=None)
+    out_mv_b, out_s_b = net(x_mv, scalars=None, patch_mv=None)
+
+    assert torch.allclose(out_mv_a, out_mv_b, atol=1e-6)
+
+
+def test_gatr_patch_mv_changes_output():
+    """Nonzero patch_mv perturbs the output; patch_mv=None on a patch-enabled net matches no-patch forward."""
+    from su2eqnn.layers.attention.config import SelfAttentionConfig
+    from su2eqnn.layers.mlp.config import MLPConfig
+    from su2eqnn.nets.gatr import GATr
+
+    ITEMS = 5
+    IN_MV, OUT_MV, HIDDEN_MV, PATCH_MV = 1, 1, 4, 4
+
+    torch.manual_seed(0)
+    net = GATr(
+        in_mv_channels=IN_MV,
+        out_mv_channels=OUT_MV,
+        hidden_mv_channels=HIDDEN_MV,
+        in_s_channels=None,
+        out_s_channels=None,
+        hidden_s_channels=None,
+        attention=SelfAttentionConfig(num_heads=2, multi_query=True, pos_encoding=False),
+        mlp=MLPConfig(activation="gelu"),
+        num_blocks=2,
+        patch_mv_channels=PATCH_MV,
+    )
+    net.eval()
+    assert net.patch_proj is not None
+    assert len(net.patch_proj) == 2
+
+    x_mv = torch.randn(BATCH, ITEMS, IN_MV, 8)
+    patch_mv = torch.randn(BATCH, ITEMS, PATCH_MV, 8)
+
+    out_no_patch, _ = net(x_mv, scalars=None, patch_mv=None)
+    out_with_patch, _ = net(x_mv, scalars=None, patch_mv=patch_mv)
+
+    assert not torch.allclose(out_no_patch, out_with_patch, atol=1e-6), \
+        "nonzero patch_mv must change GATr output"
+
+
+def test_gatr_patch_mv_equivariance():
+    """GATr with patch injection commutes with Spin(3) when momenta AND patch_mv co-rotate."""
+    from su2eqnn.layers.attention.config import SelfAttentionConfig
+    from su2eqnn.layers.mlp.config import MLPConfig
+    from su2eqnn.nets.gatr import GATr
+
+    ITEMS = 5
+    IN_MV, OUT_MV, HIDDEN_MV, PATCH_MV = 1, 1, 4, 4
+
+    net = GATr(
+        in_mv_channels=IN_MV,
+        out_mv_channels=OUT_MV,
+        hidden_mv_channels=HIDDEN_MV,
+        in_s_channels=None,
+        out_s_channels=None,
+        hidden_s_channels=None,
+        attention=SelfAttentionConfig(num_heads=2, multi_query=True, pos_encoding=False),
+        mlp=MLPConfig(activation="gelu"),
+        num_blocks=2,
+        patch_mv_channels=PATCH_MV,
+    )
+    net.eval()
+
+    for _ in range(N_TESTS):
+        x_mv = torch.randn(BATCH, ITEMS, IN_MV, 8)
+        patch_mv = torch.randn(BATCH, ITEMS, PATCH_MV, 8)
+        w = random_spin3()
+
+        def act(mv):
+            return torch.stack(
+                [spin3_action(w, mv[..., c, :]) for c in range(mv.shape[-2])], dim=-2
+            )
+
+        out_mv, _ = net(x_mv, scalars=None, patch_mv=patch_mv)
+        path1_mv, _ = net(act(x_mv), scalars=None, patch_mv=act(patch_mv))
+        path2_mv = act(out_mv)
+
+        assert torch.allclose(path1_mv, path2_mv, atol=1e-4), \
+            f"GATr patch equivariance failed: {(path1_mv - path2_mv).abs().max():.2e}"
+
+
 def test_embed_tagging_data_axes_channels():
     """5-channel embedding: channel 0 = (E,p), channels 1..4 = pure wedges."""
     from experiments.top_tagging.embedding import embed_tagging_data, UNITS
