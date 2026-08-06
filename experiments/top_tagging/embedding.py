@@ -128,6 +128,136 @@ def embed_tagging_data(
     return {"mv": mv_out, "batch": batch, "is_beam": is_beam}
 
 
+def embed_tagging_data_r7_patch(
+    fourmomenta: Tensor,
+    ptr: Tensor,
+    axes: Tensor,
+    two_beams: bool = True,
+    rescale: bool = True,
+) -> dict:
+    """Embed 4-momenta as plain Cl(3,0) MVs plus a separate patch_mv tensor.
+
+    Unlike embed_tagging_data (R4), the subjet-axis wedge bivectors are NOT
+    baked into the input mv channels. Instead mv is channel-0-only (plain
+    kinematics, same as the axes=None path of embed_tagging_data), and the
+    wedges are returned in a separate patch_mv tensor for per-block residual
+    re-injection into GATr's hidden stream (R7).
+
+    Parameters
+    ----------
+    fourmomenta : Tensor shape (n_particles, 4)
+    ptr         : Tensor shape (batchsize+1,)
+    axes        : Tensor (batchsize, K, 3) — per-jet unit reference axes
+    two_beams   : bool
+    rescale     : bool
+
+    Returns
+    -------
+    dict with keys:
+        "mv"       : Tensor (n_total, 1, 8) — plain kinematic embedding
+        "patch_mv" : Tensor (n_total, K, 8) — pure grade-2 wedge bivectors,
+                     zero on spurion rows
+        "batch"    : Tensor (n_total,) — jet index per token
+        "is_beam"  : Tensor (n_total,) bool
+    """
+    batchsize = len(ptr) - 1
+    n_axes = axes.shape[1]
+
+    if axes.shape[0] != batchsize:
+        raise ValueError(
+            f"axes batch size {axes.shape[0]} != number of jets {batchsize}"
+        )
+
+    if rescale:
+        fourmomenta = fourmomenta / UNITS
+
+    mv = torch.zeros(
+        fourmomenta.shape[0], 1, 8,
+        dtype=fourmomenta.dtype, device=fourmomenta.device,
+    )
+    mv[:, 0, 0] = fourmomenta[:, 0]
+    mv[:, 0, 1] = fourmomenta[:, 1]
+    mv[:, 0, 2] = fourmomenta[:, 2]
+    mv[:, 0, 3] = fourmomenta[:, 3]
+
+    particle_batch = get_batch_from_ptr(ptr)
+    ax = axes.to(fourmomenta.dtype)[particle_batch]     # (n_particles, K, 3)
+    p = fourmomenta[:, 1:4].unsqueeze(1)                # (n_particles, 1, 3)
+    patch_mv = torch.zeros(
+        fourmomenta.shape[0], n_axes, 8,
+        dtype=fourmomenta.dtype, device=fourmomenta.device,
+    )
+    patch_mv[:, :, 4] = p[..., 0] * ax[..., 1] - p[..., 1] * ax[..., 0]
+    patch_mv[:, :, 5] = p[..., 0] * ax[..., 2] - p[..., 2] * ax[..., 0]
+    patch_mv[:, :, 6] = p[..., 1] * ax[..., 2] - p[..., 2] * ax[..., 1]
+
+    spurions = embed_spurions(
+        two_beams=two_beams,
+        device=fourmomenta.device,
+        dtype=fourmomenta.dtype,
+    )
+    n_spurions = spurions.shape[0]
+    spurions_full = torch.zeros(n_spurions, 1, 8, dtype=mv.dtype, device=mv.device)
+    spurions_full[:, 0, :] = spurions[:, 0, :]
+
+    arange = torch.arange(batchsize, device=ptr.device)
+    spurion_idxs = torch.stack(
+        [ptr[:-1] + i for i in range(n_spurions)], dim=0
+    ) + n_spurions * arange
+    spurion_idxs = spurion_idxs.permute(1, 0).flatten()
+
+    n_total = mv.shape[0] + n_spurions * batchsize
+    is_beam = torch.zeros(n_total, dtype=torch.bool, device=mv.device)
+    is_beam[spurion_idxs] = True
+
+    mv_out = torch.empty(n_total, 1, 8, dtype=mv.dtype, device=mv.device)
+    mv_out[~is_beam] = mv
+    mv_out[is_beam] = spurions_full.repeat(batchsize, 1, 1)
+
+    # patch_mv_out defaults to zero everywhere; only real-particle rows filled.
+    # Spurion rows stay exactly zero (no subjet axis for a beam token).
+    patch_mv_out = torch.zeros(n_total, n_axes, 8, dtype=mv.dtype, device=mv.device)
+    patch_mv_out[~is_beam] = patch_mv
+
+    ptr_out = ptr.clone()
+    ptr_out[1:] = ptr[1:] + (arange + 1) * n_spurions
+    batch = get_batch_from_ptr(ptr_out)
+
+    return {"mv": mv_out, "patch_mv": patch_mv_out, "batch": batch, "is_beam": is_beam}
+
+
+def apply_patch_channel_dropout(embedding: dict, p: float) -> dict:
+    """Zero each patch bivector channel independently per jet with prob p.
+
+    Mirrors apply_axis_channel_dropout, but operates on embedding["patch_mv"]
+    instead of the input mv channels. The mask is drawn once per forward pass
+    and applied identically at every block's injection point (not resampled
+    per block) — consistent with the R4 convention that an axis is present
+    or absent for the whole jet, not per-layer.
+
+    Parameters
+    ----------
+    embedding : dict with keys "patch_mv" (n_total, K, 8) and "batch" (n_total,)
+                as returned by embed_tagging_data_r7_patch
+    p         : float — per-jet, per-channel drop probability
+
+    Returns
+    -------
+    The same dict, with embedding["patch_mv"] replaced by the masked tensor.
+    """
+    patch_mv = embedding["patch_mv"]
+    n_channels = patch_mv.shape[1]
+    if p <= 0.0 or n_channels == 0:
+        return embedding
+    batch = embedding["batch"]
+    n_jets = int(batch.max().item()) + 1
+    keep = (
+        torch.rand(n_jets, n_channels, device=patch_mv.device) >= p
+    ).to(patch_mv.dtype)                                # (B, K)
+    embedding["patch_mv"] = patch_mv * keep[batch][:, :, None]
+    return embedding
+
+
 def apply_axis_channel_dropout(embedding: dict, p: float) -> dict:
     """Zero each axis channel (1..C-1) independently per jet with prob p.
 

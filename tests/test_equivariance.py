@@ -798,6 +798,101 @@ def test_embed_tagging_data_axes_equivariance():
             f"embedding equivariance failed: {(out_rot['mv'][mask] - expected[mask]).abs().max():.2e}"
 
 
+def test_embed_tagging_data_r7_patch_channels():
+    """R7 embedding: mv is plain (channel-0-only); patch_mv carries the wedges."""
+    from experiments.top_tagging.embedding import embed_tagging_data_r7_patch, UNITS
+
+    fourmomenta = torch.tensor([
+        [40.0, 3.0, 0.0, 4.0],
+        [10.0, 0.0, 1.0, 2.0],
+        [20.0, 1.0, 1.0, 5.0],
+    ])
+    ptr = torch.tensor([0, 2, 3])
+    axes = torch.zeros(2, 4, 3)
+    axes[:, :, 2] = 1.0   # all axes = +z
+
+    out = embed_tagging_data_r7_patch(fourmomenta, ptr, axes, two_beams=True, rescale=True)
+    mv = out["mv"]
+    patch_mv = out["patch_mv"]
+
+    assert mv.shape[1] == 1, f"expected plain 1-channel mv, got {mv.shape[1]}"
+    assert patch_mv.shape[1] == 4, f"expected 4 patch channels, got {patch_mv.shape[1]}"
+
+    particles_mv = mv[~out["is_beam"]]          # (3, 1, 8)
+    particles_patch = patch_mv[~out["is_beam"]]  # (3, 4, 8)
+    p = fourmomenta / UNITS
+
+    # mv channel 0: E, px, py, pz -- identical to embed_tagging_data's channel 0
+    assert torch.allclose(particles_mv[:, 0, 0], p[:, 0], atol=1e-6)
+    assert torch.allclose(particles_mv[:, 0, 1:4], p[:, 1:4], atol=1e-6)
+
+    # patch_mv with n̂ = +z: wedge = px*e13 + py*e23 (same formula as R4 channels 1-4)
+    for k in range(4):
+        assert particles_patch[:, k, 4].abs().max() < 1e-6
+        assert torch.allclose(particles_patch[:, k, 5], p[:, 1], atol=1e-6)
+        assert torch.allclose(particles_patch[:, k, 6], p[:, 2], atol=1e-6)
+        assert particles_patch[:, k, 0:4].abs().max() < 1e-6, "patch channels must be pure grade-2"
+        assert particles_patch[:, k, 7].abs().max() < 1e-6
+
+    # spurion tokens: mv has normal beam content, patch_mv is exactly zero
+    beams_patch = patch_mv[out["is_beam"]]
+    assert beams_patch.abs().max() < 1e-6, "patch_mv must be zero on spurion tokens"
+
+
+def test_embed_tagging_data_r7_patch_equivariance():
+    """Rotating momenta AND axes rotates both mv and patch_mv by ρ(w)."""
+    from experiments.top_tagging.embedding import embed_tagging_data_r7_patch
+    from su2eqnn.interface.vector import embed_vector, extract_vector
+
+    def rotate3(w, v):
+        return torch.stack([extract_vector(spin3_action(w, embed_vector(v[i])))
+                            for i in range(v.shape[0])])
+
+    for _ in range(10):
+        fourmomenta = torch.randn(6, 4)
+        ptr = torch.tensor([0, 3, 6])
+        axes = torch.randn(2, 4, 3)
+        axes = axes / axes.norm(dim=-1, keepdim=True)
+        w = random_spin3()
+
+        out = embed_tagging_data_r7_patch(fourmomenta, ptr, axes, two_beams=False, rescale=False)
+
+        rot_p = fourmomenta.clone()
+        rot_p[:, 1:4] = rotate3(w, fourmomenta[:, 1:4])
+        rot_axes = torch.stack([rotate3(w, axes[j]) for j in range(axes.shape[0])])
+        out_rot = embed_tagging_data_r7_patch(rot_p, ptr, rot_axes, two_beams=False, rescale=False)
+
+        mask = ~out["is_beam"]
+        expected_mv = spin3_action_channels(w, out["mv"])
+        expected_patch = spin3_action_channels(w, out["patch_mv"])
+
+        assert torch.allclose(out_rot["mv"][mask], expected_mv[mask], atol=1e-4)
+        assert torch.allclose(out_rot["patch_mv"][mask], expected_patch[mask], atol=1e-4)
+
+
+def test_apply_patch_channel_dropout():
+    """Per-jet per-channel dropout on patch_mv: mv untouched, mask constant within a jet."""
+    from experiments.top_tagging.embedding import (
+        embed_tagging_data_r7_patch,
+        apply_patch_channel_dropout,
+    )
+
+    fourmomenta = torch.randn(10, 4)
+    ptr = torch.tensor([0, 5, 10])
+    axes = torch.randn(2, 4, 3)
+    axes = axes / axes.norm(dim=-1, keepdim=True)
+
+    embedding = embed_tagging_data_r7_patch(fourmomenta, ptr, axes, two_beams=True, rescale=True)
+    mv_before = embedding["mv"].clone()
+
+    torch.manual_seed(0)
+    out = apply_patch_channel_dropout(embedding, p=1.0)  # drop everything
+
+    assert torch.allclose(out["mv"], mv_before), "mv must be untouched by patch dropout"
+    assert out["patch_mv"].abs().max() < 1e-6, "p=1.0 must zero all patch channels"
+
+
+
 def test_apply_axis_channel_dropout():
     """Per-jet per-axis dropout: channel 0 intact, mask constant within a jet."""
     from experiments.top_tagging.embedding import (
