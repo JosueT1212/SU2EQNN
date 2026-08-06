@@ -727,6 +727,69 @@ def test_gatr_patch_mv_equivariance():
             f"GATr patch equivariance failed: {(path1_mv - path2_mv).abs().max():.2e}"
 
 
+def test_gatr_patch_proj_zero_preserved_with_nonzero_bias():
+    """patch_proj must preserve zero-patch-mv -> zero-injection even after training moves its bias.
+
+    Spurion tokens carry patch_mv == 0 exactly by design (see
+    experiments/top_tagging/embedding.py's embed_tagging_data_r7_patch). If
+    patch_proj[i] has a learnable grade-0 bias, that bias starts at zero but
+    receives gradient during training and becomes nonzero, which would inject
+    spurious grade-0 signal into spurion tokens (patch_proj[i](0) != 0). This
+    test simulates the post-training state by manually setting a nonzero bias
+    on patch_proj[0] and asserts patch_proj[i](0) stays exactly zero.
+    """
+    from su2eqnn.layers.attention.config import SelfAttentionConfig
+    from su2eqnn.layers.mlp.config import MLPConfig
+    from su2eqnn.nets.gatr import GATr
+
+    ITEMS = 5
+    IN_MV, OUT_MV, HIDDEN_MV, PATCH_MV = 1, 1, 4, 4
+
+    torch.manual_seed(0)
+    net = GATr(
+        in_mv_channels=IN_MV,
+        out_mv_channels=OUT_MV,
+        hidden_mv_channels=HIDDEN_MV,
+        in_s_channels=None,
+        out_s_channels=None,
+        hidden_s_channels=None,
+        attention=SelfAttentionConfig(num_heads=2, multi_query=True, pos_encoding=False),
+        mlp=MLPConfig(activation="gelu"),
+        num_blocks=2,
+        patch_mv_channels=PATCH_MV,
+    )
+    net.eval()
+    assert net.patch_proj is not None
+
+    layer0 = net.patch_proj[0]
+
+    # patch_proj must be constructed with bias=False: any grade-0 bias would
+    # drift away from zero during training (it receives gradient from the
+    # pooled classification logit) and then inject spurious grade-0 signal
+    # into spurion tokens, whose patch_mv is exactly zero by design.
+    assert layer0.bias is None, (
+        "patch_proj layers must be constructed with bias=False so that "
+        "patch_proj[i](zero patch_mv) stays exactly zero even after "
+        "training moves the bias away from its zero initialization"
+    )
+
+    # Simulate post-training state: if a bias parameter existed, force it
+    # nonzero (as it would be after gradient updates during training) and
+    # confirm the zero-preserving invariant still holds regardless.
+    if layer0.bias is not None:
+        with torch.no_grad():
+            layer0.bias.fill_(0.5)
+
+    zero_patch_mv = torch.zeros(BATCH, ITEMS, HIDDEN_MV, 8)
+    out_mv, _ = layer0(zero_patch_mv, scalars=None)
+
+    assert torch.equal(out_mv, torch.zeros_like(out_mv)), (
+        "patch_proj[i](zero patch_mv) must stay exactly zero, otherwise "
+        "spurion tokens (patch_mv == 0 by design) receive spurious grade-0 "
+        "signal"
+    )
+
+
 def test_embed_tagging_data_axes_channels():
     """5-channel embedding: channel 0 = (E,p), channels 1..4 = pure wedges."""
     from experiments.top_tagging.embedding import embed_tagging_data, UNITS

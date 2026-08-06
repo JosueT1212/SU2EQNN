@@ -111,6 +111,7 @@ class GATr(nn.Module):
                     hidden_mv_channels,
                     in_s_channels=None,
                     out_s_channels=None,
+                    bias=False,
                 )
                 for _ in range(num_blocks)
             ])
