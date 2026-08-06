@@ -11,6 +11,7 @@ import time
 import logging
 
 import torch
+from torch import nn
 import hydra
 from omegaconf import DictConfig
 from torch_geometric.loader import DataLoader as GeometricDataLoader
@@ -20,14 +21,19 @@ from su2eqnn.nets.gatr import GATr
 from su2eqnn.layers.attention.config import SelfAttentionConfig
 from su2eqnn.layers.mlp.config import MLPConfig
 from experiments.top_tagging.dataset import TopTaggingDataset
-from experiments.top_tagging.embedding import embed_tagging_data, apply_axis_channel_dropout
-from experiments.top_tagging.wrapper import TopTaggingWrapper
+from experiments.top_tagging.embedding import (
+    embed_tagging_data,
+    apply_axis_channel_dropout,
+    embed_tagging_data_r7_patch,
+    apply_patch_channel_dropout,
+)
+from experiments.top_tagging.wrapper import TopTaggingWrapper, TopTaggingWrapperR7Patch
 
 log = logging.getLogger(__name__)
 
 
-def build_model(cfg) -> TopTaggingWrapper:
-    """Instantiate GATr + TopTaggingWrapper from config.
+def build_model(cfg) -> nn.Module:
+    """Instantiate GATr + a TopTaggingWrapper (or TopTaggingWrapperR7Patch) from config.
 
     Parameters
     ----------
@@ -36,7 +42,9 @@ def build_model(cfg) -> TopTaggingWrapper:
         num_blocks         : int
         num_heads          : int
         in_mv_channels     : int (optional, default 1)
+        patch_mv_channels  : int (optional, default None)
     """
+    patch_mv_channels = getattr(cfg.model, "patch_mv_channels", None)
     net = GATr(
         in_mv_channels=getattr(cfg.model, "in_mv_channels", 1),
         out_mv_channels=1,
@@ -47,7 +55,10 @@ def build_model(cfg) -> TopTaggingWrapper:
         attention=SelfAttentionConfig(num_heads=cfg.model.num_heads),
         mlp=MLPConfig(activation="gelu"),
         num_blocks=cfg.model.num_blocks,
+        patch_mv_channels=patch_mv_channels,
     )
+    if patch_mv_channels is not None:
+        return TopTaggingWrapperR7Patch(net)
     return TopTaggingWrapper(net)
 
 
@@ -58,12 +69,20 @@ def evaluate(model, loader, cfg, device):
     with torch.no_grad():
         for batch in loader:
             batch = batch.to(device)
-            embedding = embed_tagging_data(
-                batch.x, batch.ptr,
-                two_beams=cfg.data.two_beams,
-                rescale=cfg.data.rescale_data,
-                axes=getattr(batch, "axes", None),
-            )
+            if getattr(cfg.model, "patch_mv_channels", None) is not None:
+                embedding = embed_tagging_data_r7_patch(
+                    batch.x, batch.ptr,
+                    axes=batch.axes,
+                    two_beams=cfg.data.two_beams,
+                    rescale=cfg.data.rescale_data,
+                )
+            else:
+                embedding = embed_tagging_data(
+                    batch.x, batch.ptr,
+                    two_beams=cfg.data.two_beams,
+                    rescale=cfg.data.rescale_data,
+                    axes=getattr(batch, "axes", None),
+                )
             logits = model(embedding)  # (B, 1)
             all_logits.append(logits.cpu())
             all_labels.append(batch.label.cpu())
@@ -144,14 +163,25 @@ def run_experiment(cfg: DictConfig) -> None:
 
         for batch in loader_train:
             batch = batch.to(device)
-            embedding = embed_tagging_data(
-                batch.x, batch.ptr,
-                two_beams=cfg.data.two_beams,
-                rescale=cfg.data.rescale_data,
-                axes=getattr(batch, "axes", None),
-            )
+            if getattr(cfg.model, "patch_mv_channels", None) is not None:
+                embedding = embed_tagging_data_r7_patch(
+                    batch.x, batch.ptr,
+                    axes=batch.axes,
+                    two_beams=cfg.data.two_beams,
+                    rescale=cfg.data.rescale_data,
+                )
+            else:
+                embedding = embed_tagging_data(
+                    batch.x, batch.ptr,
+                    two_beams=cfg.data.two_beams,
+                    rescale=cfg.data.rescale_data,
+                    axes=getattr(batch, "axes", None),
+                )
             if axis_dropout_p > 0.0:
-                embedding = apply_axis_channel_dropout(embedding, axis_dropout_p)
+                if getattr(cfg.model, "patch_mv_channels", None) is not None:
+                    embedding = apply_patch_channel_dropout(embedding, axis_dropout_p)
+                else:
+                    embedding = apply_axis_channel_dropout(embedding, axis_dropout_p)
             logits = model(embedding)              # (B, 1)
             targets = batch.label.float().unsqueeze(1)  # (B, 1)
             loss = criterion(logits, targets)
