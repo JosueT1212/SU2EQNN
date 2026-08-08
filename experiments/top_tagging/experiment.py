@@ -29,6 +29,8 @@ from experiments.top_tagging.wrapper import TopTaggingWrapper
 
 log = logging.getLogger(__name__)
 
+_r8_pseudoscalar_logged = False
+
 
 def build_model(cfg) -> TopTaggingWrapper:
     """Instantiate GATr + TopTaggingWrapper from config.
@@ -62,11 +64,14 @@ def build_embedding(batch, cfg) -> dict:
     optional p_lead pseudoscalar). Anything else (default/unset) ->
     existing multi-channel embed_tagging_data (R1/R4/R5 path, unchanged).
     """
+    global _r8_pseudoscalar_logged
     variant = getattr(cfg.data, "embedding", "default")
     if variant == "r8":
         jet_axis = batch.axes[:, 0, :]
         p_lead = getattr(batch, "p_lead", None)
-        log.info(f"R8 embedding: pseudoscalar={'on' if p_lead is not None else 'off'}")
+        if not _r8_pseudoscalar_logged:
+            log.info(f"R8 embedding: pseudoscalar={'on' if p_lead is not None else 'off'}")
+            _r8_pseudoscalar_logged = True
         return embed_tagging_data_r8(
             batch.x, batch.ptr, jet_axis,
             two_beams=cfg.data.two_beams,
