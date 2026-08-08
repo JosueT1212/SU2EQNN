@@ -74,3 +74,31 @@ def test_few_constituents_fallback():
     assert axes.shape == (3, 3)
     nj = jet_axis(kin)
     assert np.allclose(axes[2], nj, atol=1e-6), "missing subjet must fall back to jet axis"
+
+
+def test_leading_momentum_picks_highest_pt():
+    from su2eqnn.utils.subjets import leading_momentum
+
+    kin = np.zeros((200, 4))
+    kin[0] = [10.0, 1.0, 0.0, 0.0]    # pt=1
+    kin[1] = [50.0, 10.0, 0.0, 3.0]   # pt=10, leading
+    kin[2] = [20.0, 2.0, 2.0, 1.0]    # pt=2.83
+    lead = leading_momentum(kin)
+    assert np.allclose(lead, [50.0, 10.0, 0.0, 3.0])
+
+
+def test_leading_momentum_ignores_padding():
+    from su2eqnn.utils.subjets import leading_momentum
+
+    kin = np.zeros((200, 4))
+    kin[0] = [10.0, 1.0, 0.0, 0.0]
+    lead = leading_momentum(kin)
+    assert np.allclose(lead, [10.0, 1.0, 0.0, 0.0])
+
+
+def test_leading_momentum_empty_jet():
+    from su2eqnn.utils.subjets import leading_momentum
+
+    kin = np.zeros((200, 4))
+    lead = leading_momentum(kin)
+    assert np.allclose(lead, [0.0, 0.0, 0.0, 0.0])

@@ -27,6 +27,25 @@ def jet_axis(kinematics: np.ndarray) -> np.ndarray:
     return p / norm
 
 
+def leading_momentum(kinematics: np.ndarray) -> np.ndarray:
+    """4-momentum row of the highest-pT real (non-zero-padded) constituent.
+
+    Parameters
+    ----------
+    kinematics : (n_pad, 4) float array — E, px, py, pz rows, zero-padded.
+
+    Returns
+    -------
+    (4,) row [E, px, py, pz]. All-zero if the jet has no real constituents.
+    """
+    mask = np.abs(kinematics).max(axis=-1) > EPS
+    real = kinematics[mask]
+    if len(real) == 0:
+        return np.zeros(4)
+    pt = np.hypot(real[:, 1], real[:, 2])
+    return real[np.argmax(pt)]
+
+
 def _eta_phi_pt(p3: np.ndarray):
     """p3: (n, 3) momenta → (eta, phi, pt) arrays."""
     pt = np.hypot(p3[:, 0], p3[:, 1])
