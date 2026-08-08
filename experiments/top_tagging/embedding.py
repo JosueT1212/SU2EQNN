@@ -128,6 +128,88 @@ def embed_tagging_data(
     return {"mv": mv_out, "batch": batch, "is_beam": is_beam}
 
 
+def embed_tagging_data_r8(
+    fourmomenta: Tensor,
+    ptr: Tensor,
+    jet_axis: Tensor,
+    two_beams: bool = True,
+    rescale: bool = True,
+    p_lead: Tensor = None,
+) -> dict:
+    """Embed sparse 4-momenta as single-channel Cl(3,0) MVs (R8 layout).
+
+    Channel 0 per particle: (E, px, py, pz, b23, b31, b12, I) where
+    (b23,b31,b12) = p⃗ ∧ n̂_jet (same wedge as embed_tagging_data's axes
+    branch, restricted to K=1) and I = p⃗ · (n̂_jet × p̂_lead) is the
+    pseudoscalar volume, present only when p_lead is given.
+
+    Parameters
+    ----------
+    fourmomenta : Tensor shape (n_particles, 4)
+    ptr         : Tensor shape (batchsize+1,)
+    jet_axis    : Tensor shape (batchsize, 3) — per-jet unit axis
+    two_beams   : bool
+    rescale     : bool
+    p_lead      : Tensor shape (batchsize, 4) or None — per-jet leading
+                  constituent 4-momentum (unrescaled). When given, index 7
+                  (pseudoscalar) is filled; otherwise it stays 0 (R8a).
+
+    Returns
+    -------
+    dict with keys "mv" (n_total, 1, 8), "batch" (n_total,), "is_beam" (n_total,)
+    """
+    batchsize = len(ptr) - 1
+
+    if rescale:
+        fourmomenta = fourmomenta / UNITS
+
+    mv = torch.zeros(
+        fourmomenta.shape[0], 1, 8,
+        dtype=fourmomenta.dtype, device=fourmomenta.device,
+    )
+    mv[:, 0, 0] = fourmomenta[:, 0]
+    mv[:, 0, 1:4] = fourmomenta[:, 1:4]
+
+    particle_batch = get_batch_from_ptr(ptr)
+    ax = jet_axis.to(fourmomenta.dtype)[particle_batch]   # (n_particles, 3)
+    p = fourmomenta[:, 1:4]                                # (n_particles, 3)
+    mv[:, 0, 4] = p[:, 0] * ax[:, 1] - p[:, 1] * ax[:, 0]   # e12
+    mv[:, 0, 5] = p[:, 0] * ax[:, 2] - p[:, 2] * ax[:, 0]   # e13
+    mv[:, 0, 6] = p[:, 1] * ax[:, 2] - p[:, 2] * ax[:, 1]   # e23
+
+    if p_lead is not None:
+        pl = p_lead[:, 1:4].to(fourmomenta.dtype)
+        pl_norm = pl.norm(dim=-1, keepdim=True).clamp_min(1e-12)
+        pl_hat = (pl / pl_norm)[particle_batch]             # (n_particles, 3)
+        cross = torch.cross(ax, pl_hat, dim=-1)
+        mv[:, 0, 7] = (p * cross).sum(dim=-1)
+
+    spurions = embed_spurions(
+        two_beams=two_beams, device=fourmomenta.device, dtype=fourmomenta.dtype,
+    )   # (n_spurions, 1, 8)
+    n_spurions = spurions.shape[0]
+
+    arange = torch.arange(batchsize, device=ptr.device)
+    spurion_idxs = torch.stack(
+        [ptr[:-1] + i for i in range(n_spurions)], dim=0
+    ) + n_spurions * arange
+    spurion_idxs = spurion_idxs.permute(1, 0).flatten()
+
+    n_total = mv.shape[0] + n_spurions * batchsize
+    is_beam = torch.zeros(n_total, dtype=torch.bool, device=mv.device)
+    is_beam[spurion_idxs] = True
+
+    mv_out = torch.empty(n_total, 1, 8, dtype=mv.dtype, device=mv.device)
+    mv_out[~is_beam] = mv
+    mv_out[is_beam] = spurions.repeat(batchsize, 1, 1)
+
+    ptr_out = ptr.clone()
+    ptr_out[1:] = ptr[1:] + (arange + 1) * n_spurions
+    batch = get_batch_from_ptr(ptr_out)
+
+    return {"mv": mv_out, "batch": batch, "is_beam": is_beam}
+
+
 def apply_axis_channel_dropout(embedding: dict, p: float) -> dict:
     """Zero each axis channel (1..C-1) independently per jet with prob p.
 

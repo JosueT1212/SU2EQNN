@@ -396,3 +396,104 @@ def test_warm_restart_scheduler_resets_lr():
         lrs.append(opt.param_groups[0]["lr"])
     assert lrs[8] < 1.0e-4, f"LR should be near eta_min before restart, got {lrs[8]}"
     assert lrs[9] > 9.0e-4, f"LR should reset to ~initial at T_0, got {lrs[9]}"
+
+
+# ---------------------------------------------------------------------------
+# Task 7: R8 single-channel embedding
+# ---------------------------------------------------------------------------
+
+from experiments.top_tagging.embedding import embed_tagging_data_r8
+
+
+def test_embed_tagging_data_r8_shape_and_momentum():
+    fourmomenta = torch.tensor([
+        [40.0, 3.0, 0.0, 4.0],
+        [10.0, 0.0, 1.0, 2.0],
+        [20.0, 1.0, 1.0, 5.0],
+    ])
+    ptr = torch.tensor([0, 2, 3])
+    jet_axis = torch.zeros(2, 3)
+    jet_axis[:, 2] = 1.0   # +z for both jets
+
+    out = embed_tagging_data_r8(fourmomenta, ptr, jet_axis, two_beams=True, rescale=True, p_lead=None)
+    mv = out["mv"]
+    assert mv.shape[1] == 1, f"expected 1 channel, got {mv.shape[1]}"
+
+    particles = mv[~out["is_beam"]]
+    p = fourmomenta / UNITS
+    assert torch.allclose(particles[:, 0, 0], p[:, 0])
+    assert torch.allclose(particles[:, 0, 1:4], p[:, 1:4])
+
+
+def test_embed_tagging_data_r8_bivector_matches_r4_formula():
+    """With n=+z: e12(idx4)=0, e13(idx5)=px, e23(idx6)=py — same as R4's channel-1 formula."""
+    fourmomenta = torch.tensor([
+        [40.0, 3.0, 0.0, 4.0],
+        [10.0, 0.0, 1.0, 2.0],
+    ])
+    ptr = torch.tensor([0, 2])
+    jet_axis = torch.tensor([[0.0, 0.0, 1.0]])
+
+    out = embed_tagging_data_r8(fourmomenta, ptr, jet_axis, two_beams=False, rescale=False, p_lead=None)
+    particles = out["mv"][~out["is_beam"]]
+    assert particles[:, 0, 4].abs().max() < 1e-6                          # e12 = 0
+    assert torch.allclose(particles[:, 0, 5], fourmomenta[:, 1], atol=1e-6)  # e13 = px
+    assert torch.allclose(particles[:, 0, 6], fourmomenta[:, 2], atol=1e-6)  # e23 = py
+
+
+def test_embed_tagging_data_r8a_pseudoscalar_always_zero():
+    """R8a: p_lead=None -> pseudoscalar slot (index 7) is always 0."""
+    fourmomenta = torch.randn(5, 4)
+    ptr = torch.tensor([0, 5])
+    jet_axis = torch.tensor([[0.3, 0.1, 0.9]])
+    jet_axis = jet_axis / jet_axis.norm(dim=-1, keepdim=True)
+
+    out = embed_tagging_data_r8(fourmomenta, ptr, jet_axis, two_beams=False, rescale=False, p_lead=None)
+    particles = out["mv"][~out["is_beam"]]
+    assert particles[:, 0, 7].abs().max() < 1e-6
+
+
+def test_embed_tagging_data_r8b_leading_particle_pseudoscalar_is_zero():
+    """R8b: the leading particle's own I is exactly 0 (a . (b x a) = 0 identity)."""
+    fourmomenta = torch.tensor([
+        [50.0, 10.0, 0.0, 0.0],   # leading (highest pT = 10)
+        [20.0, 2.0, 3.0, 1.0],
+        [15.0, 1.0, -2.0, 4.0],
+    ])
+    ptr = torch.tensor([0, 3])
+    total_p = fourmomenta[:, 1:4].sum(dim=0, keepdim=True)
+    jet_axis = total_p / total_p.norm(dim=-1, keepdim=True)
+    p_lead = fourmomenta[0:1]   # (1, 4), the leading row itself
+
+    out = embed_tagging_data_r8(
+        fourmomenta, ptr, jet_axis, two_beams=False, rescale=False, p_lead=p_lead
+    )
+    particles = out["mv"][~out["is_beam"]]
+    assert particles[0, 0, 7].abs().item() < 1e-5, "leading particle's I must be ~0"
+    assert particles[1, 0, 7].abs().item() > 1e-5, "non-leading particle's I should generally be nonzero"
+
+
+def test_embed_tagging_data_r8b_pseudoscalar_zero_when_axes_parallel():
+    """Degenerate 1-prong limit: n_jet parallel to p_lead -> I=0 for every particle."""
+    fourmomenta = torch.tensor([
+        [50.0, 10.0, 0.0, 0.0],
+        [20.0, 2.0, 3.0, 1.0],
+    ])
+    ptr = torch.tensor([0, 2])
+    jet_axis = torch.tensor([[1.0, 0.0, 0.0]])
+    p_lead = torch.tensor([[50.0, 5.0, 0.0, 0.0]])   # parallel to jet_axis
+
+    out = embed_tagging_data_r8(
+        fourmomenta, ptr, jet_axis, two_beams=False, rescale=False, p_lead=p_lead
+    )
+    particles = out["mv"][~out["is_beam"]]
+    assert particles[:, 0, 7].abs().max() < 1e-6
+
+
+def test_embed_tagging_data_r8_beam_spurions_zero_beyond_vector():
+    fourmomenta = torch.zeros(3, 4)
+    ptr = torch.tensor([0, 3])
+    jet_axis = torch.tensor([[0.0, 0.0, 1.0]])
+    out = embed_tagging_data_r8(fourmomenta, ptr, jet_axis, two_beams=True, rescale=False, p_lead=None)
+    beams = out["mv"][out["is_beam"]]
+    assert beams[:, 0, 4:].abs().max() < 1e-6
