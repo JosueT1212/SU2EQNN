@@ -380,6 +380,48 @@ def test_smoke_one_training_step():
     assert p0.grad is not None
 
 
+def test_build_embedding_dispatches_to_r8():
+    """cfg.data.embedding == 'r8' routes through embed_tagging_data_r8."""
+    from experiments.top_tagging.experiment import build_embedding
+    from torch_geometric.data import Data, Batch
+
+    class _R8Cfg:
+        class data:
+            two_beams = True
+            rescale_data = False
+            embedding = "r8"
+
+    fourmomenta = torch.randn(4, 4)
+    axes = torch.zeros(1, 4, 3)
+    axes[0, :, 2] = 1.0
+    p_lead = torch.randn(1, 4)
+    d = Data(x=fourmomenta, ptr=torch.tensor([0, 4]))
+    d.axes = axes
+    d.p_lead = p_lead
+    batch = Batch.from_data_list([d])
+
+    embedding = build_embedding(batch, _R8Cfg())
+    assert embedding["mv"].shape[1] == 1, "R8 embedding must be single-channel"
+
+
+def test_build_embedding_default_unchanged():
+    """Without cfg.data.embedding set, falls back to plain embed_tagging_data."""
+    from experiments.top_tagging.experiment import build_embedding
+
+    class _DefaultCfg:
+        class data:
+            two_beams = True
+            rescale_data = False
+
+    fourmomenta = torch.randn(4, 4)
+    from torch_geometric.data import Data, Batch
+    d = Data(x=fourmomenta, ptr=torch.tensor([0, 4]))
+    batch = Batch.from_data_list([d])
+
+    embedding = build_embedding(batch, _DefaultCfg())
+    assert embedding["mv"].shape[1] == 1   # no axes attribute -> 1 channel, R1-style
+
+
 def test_warm_restart_scheduler_resets_lr():
     """CosineAnnealingWarmRestarts: LR decays within a cycle, resets at T_0."""
     import torch

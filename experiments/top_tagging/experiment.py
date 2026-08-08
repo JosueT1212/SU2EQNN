@@ -20,7 +20,11 @@ from su2eqnn.nets.gatr import GATr
 from su2eqnn.layers.attention.config import SelfAttentionConfig
 from su2eqnn.layers.mlp.config import MLPConfig
 from experiments.top_tagging.dataset import TopTaggingDataset
-from experiments.top_tagging.embedding import embed_tagging_data, apply_axis_channel_dropout
+from experiments.top_tagging.embedding import (
+    embed_tagging_data,
+    embed_tagging_data_r8,
+    apply_axis_channel_dropout,
+)
 from experiments.top_tagging.wrapper import TopTaggingWrapper
 
 log = logging.getLogger(__name__)
@@ -51,6 +55,31 @@ def build_model(cfg) -> TopTaggingWrapper:
     return TopTaggingWrapper(net)
 
 
+def build_embedding(batch, cfg) -> dict:
+    """Dispatch to the correct embedding function based on cfg.data.embedding.
+
+    "r8" -> single-channel embed_tagging_data_r8 (jet-axis bivector,
+    optional p_lead pseudoscalar). Anything else (default/unset) ->
+    existing multi-channel embed_tagging_data (R1/R4/R5 path, unchanged).
+    """
+    variant = getattr(cfg.data, "embedding", "default")
+    if variant == "r8":
+        jet_axis = batch.axes[:, 0, :]
+        p_lead = getattr(batch, "p_lead", None)
+        return embed_tagging_data_r8(
+            batch.x, batch.ptr, jet_axis,
+            two_beams=cfg.data.two_beams,
+            rescale=cfg.data.rescale_data,
+            p_lead=p_lead,
+        )
+    return embed_tagging_data(
+        batch.x, batch.ptr,
+        two_beams=cfg.data.two_beams,
+        rescale=cfg.data.rescale_data,
+        axes=getattr(batch, "axes", None),
+    )
+
+
 def evaluate(model, loader, cfg, device):
     """Run evaluation on a DataLoader, return AUC and accuracy."""
     model.eval()
@@ -58,12 +87,7 @@ def evaluate(model, loader, cfg, device):
     with torch.no_grad():
         for batch in loader:
             batch = batch.to(device)
-            embedding = embed_tagging_data(
-                batch.x, batch.ptr,
-                two_beams=cfg.data.two_beams,
-                rescale=cfg.data.rescale_data,
-                axes=getattr(batch, "axes", None),
-            )
+            embedding = build_embedding(batch, cfg)
             logits = model(embedding)  # (B, 1)
             all_logits.append(logits.cpu())
             all_labels.append(batch.label.cpu())
@@ -144,12 +168,7 @@ def run_experiment(cfg: DictConfig) -> None:
 
         for batch in loader_train:
             batch = batch.to(device)
-            embedding = embed_tagging_data(
-                batch.x, batch.ptr,
-                two_beams=cfg.data.two_beams,
-                rescale=cfg.data.rescale_data,
-                axes=getattr(batch, "axes", None),
-            )
+            embedding = build_embedding(batch, cfg)
             if axis_dropout_p > 0.0:
                 embedding = apply_axis_channel_dropout(embedding, axis_dropout_p)
             logits = model(embedding)              # (B, 1)
