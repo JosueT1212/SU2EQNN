@@ -40,6 +40,10 @@ class TopTaggingDataset(torch.utils.data.Dataset):
         axes = (
             torch.tensor(raw[axes_key], dtype=dtype) if axes_key in raw.files else None
         )
+        p_lead_key = f"p_lead_{mode}"
+        p_lead = (
+            torch.tensor(raw[p_lead_key], dtype=dtype) if p_lead_key in raw.files else None
+        )
 
         self.data_list = []
         for i in range(kinematics.shape[0]):
@@ -50,6 +54,8 @@ class TopTaggingDataset(torch.utils.data.Dataset):
             data = Data(x=fourmomenta, label=label)
             if axes is not None:
                 data.axes = axes[i].unsqueeze(0)   # (1, 4, 3)
+            if p_lead is not None:
+                data.p_lead = p_lead[i].unsqueeze(0)   # (1, 4)
             self.data_list.append(data)
 
     def __len__(self):

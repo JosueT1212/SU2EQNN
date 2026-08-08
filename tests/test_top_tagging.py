@@ -130,6 +130,30 @@ def test_dataset_loads_axes(tmp_path):
     assert torch.allclose(d.axes[0], torch.tensor(axes[0]))
 
 
+def test_dataset_loads_p_lead(tmp_path):
+    """Data objects carry per-jet p_lead (1,4) when npz contains p_lead_{mode}."""
+    import numpy as np
+    import torch
+    from experiments.top_tagging.dataset import TopTaggingDataset
+
+    n_jets = 3
+    kin = np.zeros((n_jets, 10, 4), dtype=np.float32)
+    kin[:, 0] = [10.0, 1.0, 0.0, 9.0]
+    kin[:, 1] = [10.0, -1.0, 0.5, 9.0]
+    labels = np.array([True, False, True])
+    p_lead = np.tile(np.array([50.0, 10.0, 0.0, 3.0], dtype=np.float32), (n_jets, 1))
+
+    path = tmp_path / "mini_leading.npz"
+    np.savez(path, kinematics_train=kin, labels_train=labels, p_lead_train=p_lead)
+
+    ds = TopTaggingDataset(rescale_data=True)
+    ds.load_data(str(path), "train")
+    d = ds[0]
+    assert hasattr(d, "p_lead")
+    assert d.p_lead.shape == (1, 4)
+    assert torch.allclose(d.p_lead[0], torch.tensor(p_lead[0]))
+
+
 # ---------------------------------------------------------------------------
 # Task 4: Embedding
 # ---------------------------------------------------------------------------
