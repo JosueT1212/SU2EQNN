@@ -1,0 +1,27 @@
+data:
+  path: data/toptagging_full_axes.npz
+  rescale_data: true
+  two_beams: true
+  embedding: r8
+
+model:
+  in_mv_channels: 1
+  hidden_mv_channels: 16
+  num_blocks: 6
+  num_heads: 4
+
+training:
+  epochs: 21
+  batch_size: 32
+  lr: 0.00015
+  validate_every_n_steps: 5000
+  checkpoint_path: checkpoints/top_tagging_r8a_full21.pt
+  axis_dropout_p: 0.0
+  scheduler: cosine_warm_restarts
+  scheduler_t0_steps: 794724
+  eta_min: 1.0e-06
+  optimizer: lion
+  weight_decay: 0.2
+
+evaluation:
+  batch_size: 64
