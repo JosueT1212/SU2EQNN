@@ -415,11 +415,14 @@ def test_build_embedding_default_unchanged():
 
     fourmomenta = torch.randn(4, 4)
     from torch_geometric.data import Data, Batch
+    axes = torch.zeros(1, 4, 3)
+    axes[0, :, 2] = 1.0
     d = Data(x=fourmomenta, ptr=torch.tensor([0, 4]))
+    d.axes = axes
     batch = Batch.from_data_list([d])
 
     embedding = build_embedding(batch, _DefaultCfg())
-    assert embedding["mv"].shape[1] == 1   # no axes attribute -> 1 channel, R1-style
+    assert embedding["mv"].shape[1] == 5   # axes present -> R4-style multi-axis, not R8's 1-channel
 
 
 def test_warm_restart_scheduler_resets_lr():
@@ -441,7 +444,7 @@ def test_warm_restart_scheduler_resets_lr():
 
 
 # ---------------------------------------------------------------------------
-# Task 7: R8 single-channel embedding
+# Task 4: R8 single-channel embedding
 # ---------------------------------------------------------------------------
 
 from experiments.top_tagging.embedding import embed_tagging_data_r8
@@ -530,6 +533,36 @@ def test_embed_tagging_data_r8b_pseudoscalar_zero_when_axes_parallel():
     )
     particles = out["mv"][~out["is_beam"]]
     assert particles[:, 0, 7].abs().max() < 1e-6
+
+
+def test_embed_tagging_data_r8b_pseudoscalar_matches_determinant_reference():
+    """I must equal det[p_i, n_jet, p_lead_hat] exactly — catches sign flips, swapped operands, missing normalization."""
+    torch.manual_seed(0)
+    fourmomenta = torch.randn(6, 4)
+    ptr = torch.tensor([0, 3, 6])
+    jet_axis = torch.randn(2, 3)
+    jet_axis = jet_axis / jet_axis.norm(dim=-1, keepdim=True)
+    p_lead = torch.randn(2, 4)
+
+    out = embed_tagging_data_r8(
+        fourmomenta, ptr, jet_axis, two_beams=False, rescale=False, p_lead=p_lead
+    )
+    particles = out["mv"][~out["is_beam"]]
+    computed_I = particles[:, 0, 7]
+
+    particle_batch = get_batch_from_ptr(ptr)
+    p = fourmomenta[:, 1:4]
+    n = jet_axis[particle_batch]
+    pl = p_lead[:, 1:4]
+    pl_hat = (pl / pl.norm(dim=-1, keepdim=True))[particle_batch]
+
+    ref_I = torch.stack([
+        torch.linalg.det(torch.stack([p[i], n[i], pl_hat[i]]))
+        for i in range(p.shape[0])
+    ])
+
+    assert torch.allclose(computed_I, ref_I, atol=1e-5), \
+        f"pseudoscalar doesn't match determinant reference: max diff {(computed_I - ref_I).abs().max():.2e}"
 
 
 def test_embed_tagging_data_r8_beam_spurions_zero_beyond_vector():

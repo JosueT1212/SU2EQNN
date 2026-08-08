@@ -9,6 +9,11 @@ Particle MV layout, channel 0: [E, px, py, pz, 0, 0, 0, 0]
 Optional axis channels 1..K (R4 multi-axis bivector encoding):
   channel 1+k = p⃗ ∧ n̂_k, pure grade-2 at indices 4 (e12), 5 (e13), 6 (e23),
   where n̂_k are per-jet unit reference axes (jet axis + exclusive-kT subjets).
+
+R8 single-channel layout (see embed_tagging_data_r8): everything lives in
+channel 0 — momentum at indices 0-3, the p⃗ ∧ n̂_jet bivector at indices 4-6,
+and an optional pseudoscalar I = p⃗ · (n̂_jet × p̂_lead) at index 7 (zero when
+p_lead is not supplied, i.e. the R8a ablation).
 """
 
 import torch
@@ -139,7 +144,7 @@ def embed_tagging_data_r8(
     """Embed sparse 4-momenta as single-channel Cl(3,0) MVs (R8 layout).
 
     Channel 0 per particle: (E, px, py, pz, b23, b31, b12, I) where
-    (b23,b31,b12) = p⃗ ∧ n̂_jet (same wedge as embed_tagging_data's axes
+    (b12, b13, b23) = p⃗ ∧ n̂_jet (same wedge as embed_tagging_data's axes
     branch, restricted to K=1) and I = p⃗ · (n̂_jet × p̂_lead) is the
     pseudoscalar volume, present only when p_lead is given.
 

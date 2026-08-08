@@ -66,6 +66,7 @@ def build_embedding(batch, cfg) -> dict:
     if variant == "r8":
         jet_axis = batch.axes[:, 0, :]
         p_lead = getattr(batch, "p_lead", None)
+        log.info(f"R8 embedding: pseudoscalar={'on' if p_lead is not None else 'off'}")
         return embed_tagging_data_r8(
             batch.x, batch.ptr, jet_axis,
             two_beams=cfg.data.two_beams,
