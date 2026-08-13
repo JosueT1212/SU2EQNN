@@ -6,10 +6,10 @@ Particle MV layout, channel 0: [E, px, py, pz, 0, 0, 0, 0]
   - py → index 2 (grade-1 e2)
   - pz → index 3 (grade-1 e3)
 
-Optional axis channels 1..K (R4 multi-axis bivector encoding):
+Optional axis channels 1..K (subjet-axis bivector injection, grade 2):
   channel 1+k = p⃗ ∧ n̂_k, pure grade-2 at indices 4 (e12), 5 (e13), 6 (e23),
   where n̂_k are per-jet unit reference axes (jet axis + exclusive-kT subjets).
-  Index 7 (pseudoscalar, R5b): chi_i^(k) = n̂_k · (p⃗_i × v⃗_i), an Efremov-style
+  Index 7 (pseudoscalar, local handedness): chi_i^(k) = n̂_k · (p⃗_i × v⃗_i), an Efremov-style
   local-handedness scalar, with v⃗_i an intra-jet momentum-weighted neighborhood
   direction (see embed_tagging_data for details).
 """
@@ -93,7 +93,7 @@ def embed_tagging_data(
         mv[:, 1:, 5] = p[..., 0] * ax[..., 2] - p[..., 2] * ax[..., 0]
         mv[:, 1:, 6] = p[..., 1] * ax[..., 2] - p[..., 2] * ax[..., 1]
 
-        # R5b pseudoscalar slots: Efremov-style local handedness about each axis.
+        # Local handedness (grade 3): Efremov-style handedness about each axis.
         # v_i = normalized sum_{j!=i} (|p_j|/max(|p_i-p_j|,1e-3)) p_j within the
         # jet; chi_i^(k) = n_k . (p_i x v_i). Neighborhood average (not
         # nearest-neighbor) for IRC smoothness. O(n^2) per jet.

@@ -648,7 +648,7 @@ def test_embed_tagging_data_axes_channels():
         assert torch.allclose(particles[:, k, 5], p[:, 1], atol=1e-6)
         assert torch.allclose(particles[:, k, 6], p[:, 2], atol=1e-6)
         assert particles[:, k, 0:4].abs().max() < 1e-6, "wedge channels must be pure grade-2"
-    # slot 7 (pseudoscalar, R5b): chi_i^(k) = n_k . (p_i x v_i), same for every
+    # slot 7 (pseudoscalar, local handedness): chi_i^(k) = n_k . (p_i x v_i), same for every
     # k since all four axes are +z here. jet0 has 2 particles -> each is the
     # other's sole neighbor, so v_i is exactly the other particle's momentum;
     # jet1 has 1 particle -> no neighbors -> chi = 0.
