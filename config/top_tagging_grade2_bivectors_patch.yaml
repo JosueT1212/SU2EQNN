@@ -15,7 +15,7 @@ training:
   batch_size: 32
   lr: 1.0e-3
   validate_every_n_steps: 200
-  checkpoint_path: checkpoints/top_tagging_r7_patch_best.pt
+  checkpoint_path: checkpoints/top_tagging_grade2_bivectors_patch_best.pt
   axis_dropout_p: 0.2
   scheduler: cosine_warm_restarts
   scheduler_t0_steps: 3125

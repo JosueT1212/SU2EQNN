@@ -77,8 +77,8 @@ class TopTaggingWrapper(nn.Module):
         return logits  # (batchsize, 1)
 
 
-class TopTaggingWrapperR7Patch(nn.Module):
-    """GATr + mean-pool head for R7 patch-injected binary jet classification.
+class TopTaggingWrapperBivectorPatch(nn.Module):
+    """GATr + mean-pool head for bivector patch-injected binary jet classification.
 
     Parameters
     ----------
@@ -95,7 +95,7 @@ class TopTaggingWrapperR7Patch(nn.Module):
 
         Parameters
         ----------
-        embedding : dict from embed_tagging_data_r7_patch
+        embedding : dict from embed_tagging_data_bivector_patch
             "mv"       : Tensor (n_total, 1, 8)
             "patch_mv" : Tensor (n_total, K, 8)
             "batch"    : Tensor (n_total,) jet index per token

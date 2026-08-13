@@ -6,7 +6,7 @@ Particle MV layout, channel 0: [E, px, py, pz, 0, 0, 0, 0]
   - py → index 2 (grade-1 e2)
   - pz → index 3 (grade-1 e3)
 
-Optional axis channels 1..K (R4 multi-axis bivector encoding):
+Optional axis channels 1..K (subjet-axis bivector injection, grade 2):
   channel 1+k = p⃗ ∧ n̂_k, pure grade-2 at indices 4 (e12), 5 (e13), 6 (e23),
   where n̂_k are per-jet unit reference axes (jet axis + exclusive-kT subjets).
 """
@@ -128,7 +128,7 @@ def embed_tagging_data(
     return {"mv": mv_out, "batch": batch, "is_beam": is_beam}
 
 
-def embed_tagging_data_r7_patch(
+def embed_tagging_data_bivector_patch(
     fourmomenta: Tensor,
     ptr: Tensor,
     axes: Tensor,
@@ -137,11 +137,11 @@ def embed_tagging_data_r7_patch(
 ) -> dict:
     """Embed 4-momenta as plain Cl(3,0) MVs plus a separate patch_mv tensor.
 
-    Unlike embed_tagging_data (R4), the subjet-axis wedge bivectors are NOT
+    Unlike embed_tagging_data (input-embedding bivector injection), the subjet-axis wedge bivectors are NOT
     baked into the input mv channels. Instead mv is channel-0-only (plain
     kinematics, same as the axes=None path of embed_tagging_data), and the
     wedges are returned in a separate patch_mv tensor for per-block residual
-    re-injection into GATr's hidden stream (R7).
+    re-injection into GATr's hidden stream (patch variant).
 
     Parameters
     ----------
@@ -232,13 +232,13 @@ def apply_patch_channel_dropout(embedding: dict, p: float) -> dict:
     Mirrors apply_axis_channel_dropout, but operates on embedding["patch_mv"]
     instead of the input mv channels. The mask is drawn once per forward pass
     and applied identically at every block's injection point (not resampled
-    per block) — consistent with the R4 convention that an axis is present
+    per block) — consistent with the input-embedding convention that an axis is present
     or absent for the whole jet, not per-layer.
 
     Parameters
     ----------
     embedding : dict with keys "patch_mv" (n_total, K, 8) and "batch" (n_total,)
-                as returned by embed_tagging_data_r7_patch
+                as returned by embed_tagging_data_bivector_patch
     p         : float — per-jet, per-channel drop probability
 
     Returns

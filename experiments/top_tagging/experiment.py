@@ -24,16 +24,16 @@ from experiments.top_tagging.dataset import TopTaggingDataset
 from experiments.top_tagging.embedding import (
     embed_tagging_data,
     apply_axis_channel_dropout,
-    embed_tagging_data_r7_patch,
+    embed_tagging_data_bivector_patch,
     apply_patch_channel_dropout,
 )
-from experiments.top_tagging.wrapper import TopTaggingWrapper, TopTaggingWrapperR7Patch
+from experiments.top_tagging.wrapper import TopTaggingWrapper, TopTaggingWrapperBivectorPatch
 
 log = logging.getLogger(__name__)
 
 
 def build_model(cfg) -> nn.Module:
-    """Instantiate GATr + a TopTaggingWrapper (or TopTaggingWrapperR7Patch) from config.
+    """Instantiate GATr + a TopTaggingWrapper (or TopTaggingWrapperBivectorPatch) from config.
 
     Parameters
     ----------
@@ -58,7 +58,7 @@ def build_model(cfg) -> nn.Module:
         patch_mv_channels=patch_mv_channels,
     )
     if patch_mv_channels is not None:
-        return TopTaggingWrapperR7Patch(net)
+        return TopTaggingWrapperBivectorPatch(net)
     return TopTaggingWrapper(net)
 
 
@@ -70,7 +70,7 @@ def evaluate(model, loader, cfg, device):
         for batch in loader:
             batch = batch.to(device)
             if getattr(cfg.model, "patch_mv_channels", None) is not None:
-                embedding = embed_tagging_data_r7_patch(
+                embedding = embed_tagging_data_bivector_patch(
                     batch.x, batch.ptr,
                     axes=batch.axes,
                     two_beams=cfg.data.two_beams,
@@ -164,7 +164,7 @@ def run_experiment(cfg: DictConfig) -> None:
         for batch in loader_train:
             batch = batch.to(device)
             if getattr(cfg.model, "patch_mv_channels", None) is not None:
-                embedding = embed_tagging_data_r7_patch(
+                embedding = embed_tagging_data_bivector_patch(
                     batch.x, batch.ptr,
                     axes=batch.axes,
                     two_beams=cfg.data.two_beams,

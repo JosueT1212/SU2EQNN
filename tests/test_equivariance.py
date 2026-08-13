@@ -731,7 +731,7 @@ def test_gatr_patch_proj_zero_preserved_with_nonzero_bias():
     """patch_proj must preserve zero-patch-mv -> zero-injection even after training moves its bias.
 
     Spurion tokens carry patch_mv == 0 exactly by design (see
-    experiments/top_tagging/embedding.py's embed_tagging_data_r7_patch). If
+    experiments/top_tagging/embedding.py's embed_tagging_data_bivector_patch). If
     patch_proj[i] has a learnable grade-0 bias, that bias starts at zero but
     receives gradient during training and becomes nonzero, which would inject
     spurious grade-0 signal into spurion tokens (patch_proj[i](0) != 0). This
@@ -861,9 +861,9 @@ def test_embed_tagging_data_axes_equivariance():
             f"embedding equivariance failed: {(out_rot['mv'][mask] - expected[mask]).abs().max():.2e}"
 
 
-def test_embed_tagging_data_r7_patch_channels():
-    """R7 embedding: mv is plain (channel-0-only); patch_mv carries the wedges."""
-    from experiments.top_tagging.embedding import embed_tagging_data_r7_patch, UNITS
+def test_embed_tagging_data_bivector_patch_channels():
+    """bivector-patch embedding: mv is plain (channel-0-only); patch_mv carries the wedges."""
+    from experiments.top_tagging.embedding import embed_tagging_data_bivector_patch, UNITS
 
     fourmomenta = torch.tensor([
         [40.0, 3.0, 0.0, 4.0],
@@ -874,7 +874,7 @@ def test_embed_tagging_data_r7_patch_channels():
     axes = torch.zeros(2, 4, 3)
     axes[:, :, 2] = 1.0   # all axes = +z
 
-    out = embed_tagging_data_r7_patch(fourmomenta, ptr, axes, two_beams=True, rescale=True)
+    out = embed_tagging_data_bivector_patch(fourmomenta, ptr, axes, two_beams=True, rescale=True)
     mv = out["mv"]
     patch_mv = out["patch_mv"]
 
@@ -889,7 +889,7 @@ def test_embed_tagging_data_r7_patch_channels():
     assert torch.allclose(particles_mv[:, 0, 0], p[:, 0], atol=1e-6)
     assert torch.allclose(particles_mv[:, 0, 1:4], p[:, 1:4], atol=1e-6)
 
-    # patch_mv with n̂ = +z: wedge = px*e13 + py*e23 (same formula as R4 channels 1-4)
+    # patch_mv with n̂ = +z: wedge = px*e13 + py*e23 (same formula as the grade-2 bivector channels 1-4)
     for k in range(4):
         assert particles_patch[:, k, 4].abs().max() < 1e-6
         assert torch.allclose(particles_patch[:, k, 5], p[:, 1], atol=1e-6)
@@ -902,9 +902,9 @@ def test_embed_tagging_data_r7_patch_channels():
     assert beams_patch.abs().max() < 1e-6, "patch_mv must be zero on spurion tokens"
 
 
-def test_embed_tagging_data_r7_patch_equivariance():
+def test_embed_tagging_data_bivector_patch_equivariance():
     """Rotating momenta AND axes rotates both mv and patch_mv by ρ(w)."""
-    from experiments.top_tagging.embedding import embed_tagging_data_r7_patch
+    from experiments.top_tagging.embedding import embed_tagging_data_bivector_patch
     from su2eqnn.interface.vector import embed_vector, extract_vector
 
     def rotate3(w, v):
@@ -918,12 +918,12 @@ def test_embed_tagging_data_r7_patch_equivariance():
         axes = axes / axes.norm(dim=-1, keepdim=True)
         w = random_spin3()
 
-        out = embed_tagging_data_r7_patch(fourmomenta, ptr, axes, two_beams=False, rescale=False)
+        out = embed_tagging_data_bivector_patch(fourmomenta, ptr, axes, two_beams=False, rescale=False)
 
         rot_p = fourmomenta.clone()
         rot_p[:, 1:4] = rotate3(w, fourmomenta[:, 1:4])
         rot_axes = torch.stack([rotate3(w, axes[j]) for j in range(axes.shape[0])])
-        out_rot = embed_tagging_data_r7_patch(rot_p, ptr, rot_axes, two_beams=False, rescale=False)
+        out_rot = embed_tagging_data_bivector_patch(rot_p, ptr, rot_axes, two_beams=False, rescale=False)
 
         mask = ~out["is_beam"]
         expected_mv = spin3_action_channels(w, out["mv"])
@@ -936,7 +936,7 @@ def test_embed_tagging_data_r7_patch_equivariance():
 def test_apply_patch_channel_dropout():
     """Per-jet per-channel dropout on patch_mv: mv untouched, mask constant within a jet."""
     from experiments.top_tagging.embedding import (
-        embed_tagging_data_r7_patch,
+        embed_tagging_data_bivector_patch,
         apply_patch_channel_dropout,
     )
 
@@ -945,7 +945,7 @@ def test_apply_patch_channel_dropout():
     axes = torch.randn(2, 4, 3)
     axes = axes / axes.norm(dim=-1, keepdim=True)
 
-    embedding = embed_tagging_data_r7_patch(fourmomenta, ptr, axes, two_beams=True, rescale=True)
+    embedding = embed_tagging_data_bivector_patch(fourmomenta, ptr, axes, two_beams=True, rescale=True)
     mv_before = embedding["mv"].clone()
 
     torch.manual_seed(0)

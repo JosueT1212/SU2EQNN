@@ -1,15 +1,15 @@
-"""End-to-end smoke test for the R7 patch-injection wiring (wrapper + model)."""
+"""End-to-end smoke test for the bivector patch-injection wiring (wrapper + model)."""
 
 import torch
 
-from experiments.top_tagging.embedding import embed_tagging_data_r7_patch
-from experiments.top_tagging.wrapper import TopTaggingWrapperR7Patch
+from experiments.top_tagging.embedding import embed_tagging_data_bivector_patch
+from experiments.top_tagging.wrapper import TopTaggingWrapperBivectorPatch
 from su2eqnn.layers.attention.config import SelfAttentionConfig
 from su2eqnn.layers.mlp.config import MLPConfig
 from su2eqnn.nets.gatr import GATr
 
 
-def _build_r7_model():
+def _build_bivector_patch_model():
     net = GATr(
         in_mv_channels=1,
         out_mv_channels=1,
@@ -22,35 +22,35 @@ def _build_r7_model():
         num_blocks=3,
         patch_mv_channels=4,
     )
-    return TopTaggingWrapperR7Patch(net)
+    return TopTaggingWrapperBivectorPatch(net)
 
 
-def test_r7_wrapper_forward_shape():
-    """TopTaggingWrapperR7Patch produces one logit per jet."""
-    model = _build_r7_model()
+def test_bivector_patch_wrapper_forward_shape():
+    """TopTaggingWrapperBivectorPatch produces one logit per jet."""
+    model = _build_bivector_patch_model()
 
     fourmomenta = torch.randn(10, 4)
     ptr = torch.tensor([0, 4, 10])  # 2 jets: 4 and 6 particles
     axes = torch.randn(2, 4, 3)
     axes = axes / axes.norm(dim=-1, keepdim=True)
 
-    embedding = embed_tagging_data_r7_patch(fourmomenta, ptr, axes, two_beams=True, rescale=True)
+    embedding = embed_tagging_data_bivector_patch(fourmomenta, ptr, axes, two_beams=True, rescale=True)
     logits = model(embedding)
 
     assert logits.shape == (2, 1), f"expected (2, 1) logits, got {logits.shape}"
     assert torch.isfinite(logits).all()
 
 
-def test_r7_wrapper_backward_pass():
+def test_bivector_patch_wrapper_backward_pass():
     """Gradients flow through both the main net and the per-block patch projections."""
-    model = _build_r7_model()
+    model = _build_bivector_patch_model()
 
     fourmomenta = torch.randn(10, 4)
     ptr = torch.tensor([0, 4, 10])
     axes = torch.randn(2, 4, 3)
     axes = axes / axes.norm(dim=-1, keepdim=True)
 
-    embedding = embed_tagging_data_r7_patch(fourmomenta, ptr, axes, two_beams=True, rescale=True)
+    embedding = embed_tagging_data_bivector_patch(fourmomenta, ptr, axes, two_beams=True, rescale=True)
     logits = model(embedding)
     loss = logits.sum()
     loss.backward()
