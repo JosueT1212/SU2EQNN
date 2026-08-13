@@ -2,7 +2,7 @@ data:
   path: data/toptagging_full_axes.npz
   rescale_data: true
   two_beams: true
-  embedding: r8
+  embedding: single_channel_axis
 
 model:
   in_mv_channels: 1
@@ -15,7 +15,7 @@ training:
   batch_size: 32
   lr: 0.00015
   validate_every_n_steps: 5000
-  checkpoint_path: checkpoints/top_tagging_r8a_full21.pt
+  checkpoint_path: checkpoints/top_tagging_single_channel_axis_a_full21.pt
   axis_dropout_p: 0.0
   scheduler: cosine_warm_restarts
   scheduler_t0_steps: 794724

@@ -734,9 +734,9 @@ def test_apply_axis_channel_dropout():
             assert dropped or kept, f"jet {j} channel {c}: partial drop"
 
 
-def test_embed_tagging_data_r8_equivariance():
+def test_embed_tagging_data_single_channel_axis_equivariance():
     """Rotating momenta, jet_axis AND p_lead rotates every embedded channel by ρ(w)."""
-    from experiments.top_tagging.embedding import embed_tagging_data_r8
+    from experiments.top_tagging.embedding import embed_tagging_data_single_channel_axis
     from su2eqnn.interface.vector import embed_vector, extract_vector
 
     def rotate3(w, v):
@@ -751,7 +751,7 @@ def test_embed_tagging_data_r8_equivariance():
         p_lead = torch.randn(2, 4)
         w = random_spin3()
 
-        out = embed_tagging_data_r8(
+        out = embed_tagging_data_single_channel_axis(
             fourmomenta, ptr, jet_axis, two_beams=False, rescale=False, p_lead=p_lead
         )
 
@@ -761,14 +761,14 @@ def test_embed_tagging_data_r8_equivariance():
         rot_p_lead = p_lead.clone()
         rot_p_lead[:, 1:4] = rotate3(w, p_lead[:, 1:4])
 
-        out_rot = embed_tagging_data_r8(
+        out_rot = embed_tagging_data_single_channel_axis(
             rot_p, ptr, rot_axis, two_beams=False, rescale=False, p_lead=rot_p_lead
         )
 
         expected = spin3_action_channels(w, out["mv"])
         mask = ~out["is_beam"]
         assert torch.allclose(out_rot["mv"][mask], expected[mask], atol=1e-4), \
-            f"R8 embedding equivariance failed: {(out_rot['mv'][mask] - expected[mask]).abs().max():.2e}"
+            f"single-channel jet-axis embedding equivariance failed: {(out_rot['mv'][mask] - expected[mask]).abs().max():.2e}"
 
 
 if __name__ == "__main__":

@@ -22,7 +22,7 @@ from su2eqnn.layers.mlp.config import MLPConfig
 from experiments.top_tagging.dataset import TopTaggingDataset
 from experiments.top_tagging.embedding import (
     embed_tagging_data,
-    embed_tagging_data_r8,
+    embed_tagging_data_single_channel_axis,
     apply_axis_channel_dropout,
 )
 from experiments.top_tagging.wrapper import TopTaggingWrapper
@@ -60,19 +60,19 @@ def build_model(cfg) -> TopTaggingWrapper:
 def build_embedding(batch, cfg) -> dict:
     """Dispatch to the correct embedding function based on cfg.data.embedding.
 
-    "r8" -> single-channel embed_tagging_data_r8 (jet-axis bivector,
+    "single_channel_axis" -> single-channel embed_tagging_data_single_channel_axis (jet-axis bivector,
     optional p_lead pseudoscalar). Anything else (default/unset) ->
-    existing multi-channel embed_tagging_data (R1/R4/R5 path, unchanged).
+    existing multi-channel embed_tagging_data (baseline/bivector/pseudoscalar path, unchanged).
     """
     global _r8_pseudoscalar_logged
     variant = getattr(cfg.data, "embedding", "default")
-    if variant == "r8":
+    if variant == "single_channel_axis":
         jet_axis = batch.axes[:, 0, :]
         p_lead = getattr(batch, "p_lead", None)
         if not _r8_pseudoscalar_logged:
-            log.info(f"R8 embedding: pseudoscalar={'on' if p_lead is not None else 'off'}")
+            log.info(f"Single-channel jet-axis embedding: pseudoscalar={'on' if p_lead is not None else 'off'}")
             _r8_pseudoscalar_logged = True
-        return embed_tagging_data_r8(
+        return embed_tagging_data_single_channel_axis(
             batch.x, batch.ptr, jet_axis,
             two_beams=cfg.data.two_beams,
             rescale=cfg.data.rescale_data,

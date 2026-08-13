@@ -381,7 +381,7 @@ def test_smoke_one_training_step():
 
 
 def test_build_embedding_dispatches_to_r8():
-    """cfg.data.embedding == 'r8' routes through embed_tagging_data_r8."""
+    """cfg.data.embedding == 'single_channel_axis' routes through embed_tagging_data_single_channel_axis."""
     from experiments.top_tagging.experiment import build_embedding
     from torch_geometric.data import Data, Batch
 
@@ -389,7 +389,7 @@ def test_build_embedding_dispatches_to_r8():
         class data:
             two_beams = True
             rescale_data = False
-            embedding = "r8"
+            embedding = "single_channel_axis"
 
     fourmomenta = torch.randn(4, 4)
     axes = torch.zeros(1, 4, 3)
@@ -401,7 +401,7 @@ def test_build_embedding_dispatches_to_r8():
     batch = Batch.from_data_list([d])
 
     embedding = build_embedding(batch, _R8Cfg())
-    assert embedding["mv"].shape[1] == 1, "R8 embedding must be single-channel"
+    assert embedding["mv"].shape[1] == 1, "single-channel jet-axis embedding must be single-channel"
 
 
 def test_build_embedding_default_unchanged():
@@ -422,7 +422,7 @@ def test_build_embedding_default_unchanged():
     batch = Batch.from_data_list([d])
 
     embedding = build_embedding(batch, _DefaultCfg())
-    assert embedding["mv"].shape[1] == 5   # axes present -> R4-style multi-axis, not R8's 1-channel
+    assert embedding["mv"].shape[1] == 5   # axes present -> multi-axis bivector layout, not single-channel
 
 
 def test_warm_restart_scheduler_resets_lr():
@@ -444,13 +444,13 @@ def test_warm_restart_scheduler_resets_lr():
 
 
 # ---------------------------------------------------------------------------
-# Task 4: R8 single-channel embedding
+# Task 4: single-channel jet-axis embedding
 # ---------------------------------------------------------------------------
 
-from experiments.top_tagging.embedding import embed_tagging_data_r8
+from experiments.top_tagging.embedding import embed_tagging_data_single_channel_axis
 
 
-def test_embed_tagging_data_r8_shape_and_momentum():
+def test_embed_tagging_data_single_channel_axis_shape_and_momentum():
     fourmomenta = torch.tensor([
         [40.0, 3.0, 0.0, 4.0],
         [10.0, 0.0, 1.0, 2.0],
@@ -460,7 +460,7 @@ def test_embed_tagging_data_r8_shape_and_momentum():
     jet_axis = torch.zeros(2, 3)
     jet_axis[:, 2] = 1.0   # +z for both jets
 
-    out = embed_tagging_data_r8(fourmomenta, ptr, jet_axis, two_beams=True, rescale=True, p_lead=None)
+    out = embed_tagging_data_single_channel_axis(fourmomenta, ptr, jet_axis, two_beams=True, rescale=True, p_lead=None)
     mv = out["mv"]
     assert mv.shape[1] == 1, f"expected 1 channel, got {mv.shape[1]}"
 
@@ -470,8 +470,8 @@ def test_embed_tagging_data_r8_shape_and_momentum():
     assert torch.allclose(particles[:, 0, 1:4], p[:, 1:4])
 
 
-def test_embed_tagging_data_r8_bivector_matches_r4_formula():
-    """With n=+z: e12(idx4)=0, e13(idx5)=px, e23(idx6)=py — same as R4's channel-1 formula."""
+def test_embed_tagging_data_single_channel_axis_bivector_matches_r4_formula():
+    """With n=+z: e12(idx4)=0, e13(idx5)=px, e23(idx6)=py — same as the multi-channel bivector's channel-1 formula."""
     fourmomenta = torch.tensor([
         [40.0, 3.0, 0.0, 4.0],
         [10.0, 0.0, 1.0, 2.0],
@@ -479,27 +479,27 @@ def test_embed_tagging_data_r8_bivector_matches_r4_formula():
     ptr = torch.tensor([0, 2])
     jet_axis = torch.tensor([[0.0, 0.0, 1.0]])
 
-    out = embed_tagging_data_r8(fourmomenta, ptr, jet_axis, two_beams=False, rescale=False, p_lead=None)
+    out = embed_tagging_data_single_channel_axis(fourmomenta, ptr, jet_axis, two_beams=False, rescale=False, p_lead=None)
     particles = out["mv"][~out["is_beam"]]
     assert particles[:, 0, 4].abs().max() < 1e-6                          # e12 = 0
     assert torch.allclose(particles[:, 0, 5], fourmomenta[:, 1], atol=1e-6)  # e13 = px
     assert torch.allclose(particles[:, 0, 6], fourmomenta[:, 2], atol=1e-6)  # e23 = py
 
 
-def test_embed_tagging_data_r8a_pseudoscalar_always_zero():
-    """R8a: p_lead=None -> pseudoscalar slot (index 7) is always 0."""
+def test_embed_tagging_data_single_channel_axis_variant_a_pseudoscalar_always_zero():
+    """Variant (a): p_lead=None -> pseudoscalar slot (index 7) is always 0."""
     fourmomenta = torch.randn(5, 4)
     ptr = torch.tensor([0, 5])
     jet_axis = torch.tensor([[0.3, 0.1, 0.9]])
     jet_axis = jet_axis / jet_axis.norm(dim=-1, keepdim=True)
 
-    out = embed_tagging_data_r8(fourmomenta, ptr, jet_axis, two_beams=False, rescale=False, p_lead=None)
+    out = embed_tagging_data_single_channel_axis(fourmomenta, ptr, jet_axis, two_beams=False, rescale=False, p_lead=None)
     particles = out["mv"][~out["is_beam"]]
     assert particles[:, 0, 7].abs().max() < 1e-6
 
 
-def test_embed_tagging_data_r8b_leading_particle_pseudoscalar_is_zero():
-    """R8b: the leading particle's own I is exactly 0 (a . (b x a) = 0 identity)."""
+def test_embed_tagging_data_single_channel_axis_variant_b_leading_particle_pseudoscalar_is_zero():
+    """Variant (b): the leading particle's own I is exactly 0 (a . (b x a) = 0 identity)."""
     fourmomenta = torch.tensor([
         [50.0, 10.0, 0.0, 0.0],   # leading (highest pT = 10)
         [20.0, 2.0, 3.0, 1.0],
@@ -510,7 +510,7 @@ def test_embed_tagging_data_r8b_leading_particle_pseudoscalar_is_zero():
     jet_axis = total_p / total_p.norm(dim=-1, keepdim=True)
     p_lead = fourmomenta[0:1]   # (1, 4), the leading row itself
 
-    out = embed_tagging_data_r8(
+    out = embed_tagging_data_single_channel_axis(
         fourmomenta, ptr, jet_axis, two_beams=False, rescale=False, p_lead=p_lead
     )
     particles = out["mv"][~out["is_beam"]]
@@ -518,7 +518,7 @@ def test_embed_tagging_data_r8b_leading_particle_pseudoscalar_is_zero():
     assert particles[1, 0, 7].abs().item() > 1e-5, "non-leading particle's I should generally be nonzero"
 
 
-def test_embed_tagging_data_r8b_pseudoscalar_zero_when_axes_parallel():
+def test_embed_tagging_data_single_channel_axis_variant_b_pseudoscalar_zero_when_axes_parallel():
     """Degenerate 1-prong limit: n_jet parallel to p_lead -> I=0 for every particle."""
     fourmomenta = torch.tensor([
         [50.0, 10.0, 0.0, 0.0],
@@ -528,14 +528,14 @@ def test_embed_tagging_data_r8b_pseudoscalar_zero_when_axes_parallel():
     jet_axis = torch.tensor([[1.0, 0.0, 0.0]])
     p_lead = torch.tensor([[50.0, 5.0, 0.0, 0.0]])   # parallel to jet_axis
 
-    out = embed_tagging_data_r8(
+    out = embed_tagging_data_single_channel_axis(
         fourmomenta, ptr, jet_axis, two_beams=False, rescale=False, p_lead=p_lead
     )
     particles = out["mv"][~out["is_beam"]]
     assert particles[:, 0, 7].abs().max() < 1e-6
 
 
-def test_embed_tagging_data_r8b_pseudoscalar_matches_determinant_reference():
+def test_embed_tagging_data_single_channel_axis_variant_b_pseudoscalar_matches_determinant_reference():
     """I must equal det[p_i, n_jet, p_lead_hat] exactly — catches sign flips, swapped operands, missing normalization."""
     torch.manual_seed(0)
     fourmomenta = torch.randn(6, 4)
@@ -544,7 +544,7 @@ def test_embed_tagging_data_r8b_pseudoscalar_matches_determinant_reference():
     jet_axis = jet_axis / jet_axis.norm(dim=-1, keepdim=True)
     p_lead = torch.randn(2, 4)
 
-    out = embed_tagging_data_r8(
+    out = embed_tagging_data_single_channel_axis(
         fourmomenta, ptr, jet_axis, two_beams=False, rescale=False, p_lead=p_lead
     )
     particles = out["mv"][~out["is_beam"]]
@@ -565,10 +565,10 @@ def test_embed_tagging_data_r8b_pseudoscalar_matches_determinant_reference():
         f"pseudoscalar doesn't match determinant reference: max diff {(computed_I - ref_I).abs().max():.2e}"
 
 
-def test_embed_tagging_data_r8_beam_spurions_zero_beyond_vector():
+def test_embed_tagging_data_single_channel_axis_beam_spurions_zero_beyond_vector():
     fourmomenta = torch.zeros(3, 4)
     ptr = torch.tensor([0, 3])
     jet_axis = torch.tensor([[0.0, 0.0, 1.0]])
-    out = embed_tagging_data_r8(fourmomenta, ptr, jet_axis, two_beams=True, rescale=False, p_lead=None)
+    out = embed_tagging_data_single_channel_axis(fourmomenta, ptr, jet_axis, two_beams=True, rescale=False, p_lead=None)
     beams = out["mv"][out["is_beam"]]
     assert beams[:, 0, 4:].abs().max() < 1e-6

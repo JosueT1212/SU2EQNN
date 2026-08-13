@@ -6,14 +6,14 @@ Particle MV layout, channel 0: [E, px, py, pz, 0, 0, 0, 0]
   - py → index 2 (grade-1 e2)
   - pz → index 3 (grade-1 e3)
 
-Optional axis channels 1..K (R4 multi-axis bivector encoding):
+Optional axis channels 1..K (subjet-axis bivector injection, grade 2):
   channel 1+k = p⃗ ∧ n̂_k, pure grade-2 at indices 4 (e12), 5 (e13), 6 (e23),
   where n̂_k are per-jet unit reference axes (jet axis + exclusive-kT subjets).
 
-R8 single-channel layout (see embed_tagging_data_r8): everything lives in
+Single-channel jet-axis layout (see embed_tagging_data_single_channel_axis): everything lives in
 channel 0 — momentum at indices 0-3, the p⃗ ∧ n̂_jet bivector at indices 4-6,
 and an optional pseudoscalar I = p⃗ · (n̂_jet × p̂_lead) at index 7 (zero when
-p_lead is not supplied, i.e. the R8a ablation).
+p_lead is not supplied, i.e. the single-channel variant (a)).
 """
 
 import torch
@@ -133,7 +133,7 @@ def embed_tagging_data(
     return {"mv": mv_out, "batch": batch, "is_beam": is_beam}
 
 
-def embed_tagging_data_r8(
+def embed_tagging_data_single_channel_axis(
     fourmomenta: Tensor,
     ptr: Tensor,
     jet_axis: Tensor,
@@ -141,7 +141,7 @@ def embed_tagging_data_r8(
     rescale: bool = True,
     p_lead: Tensor = None,
 ) -> dict:
-    """Embed sparse 4-momenta as single-channel Cl(3,0) MVs (R8 layout).
+    """Embed sparse 4-momenta as single-channel Cl(3,0) MVs (single-channel jet-axis layout).
 
     Channel 0 per particle: (E, px, py, pz, b23, b31, b12, I) where
     (b12, b13, b23) = p⃗ ∧ n̂_jet (same wedge as embed_tagging_data's axes
@@ -157,7 +157,7 @@ def embed_tagging_data_r8(
     rescale     : bool
     p_lead      : Tensor shape (batchsize, 4) or None — per-jet leading
                   constituent 4-momentum (unrescaled). When given, index 7
-                  (pseudoscalar) is filled; otherwise it stays 0 (R8a).
+                  (pseudoscalar) is filled; otherwise it stays 0 (variant a).
 
     Returns
     -------
