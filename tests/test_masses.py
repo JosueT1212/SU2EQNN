@@ -9,7 +9,7 @@ def _mk(px, py, pz):
     return p
 
 
-# Same 4-particle fixture family as the R5 series tests: A-B are nearly
+# Same 4-particle fixture family as the grade-3/grade-0 injection tests: A-B are nearly
 # collinear (merge first under kT), C and D are far in eta-phi.
 A = _mk(100.0, 0.0, 0.0)
 B = _mk(100.0, 1.0, 0.0)

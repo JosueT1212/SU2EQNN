@@ -14,7 +14,7 @@ training:
   batch_size: 32
   lr: 1.0e-3
   validate_every_n_steps: 200
-  checkpoint_path: checkpoints/top_tagging_r4_best.pt
+  checkpoint_path: checkpoints/top_tagging_scalar_masses_best.pt
 
 evaluation:
   batch_size: 64
