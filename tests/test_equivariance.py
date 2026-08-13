@@ -765,7 +765,7 @@ def test_phases_without_axes_raises():
 
 
 def test_phases_none_identical_to_r4():
-    """phases=None (or omitted) must be byte-identical to the R4 embedding."""
+    """phases=None (or omitted) must be byte-identical to the multi-channel bivector embedding."""
     from experiments.top_tagging.embedding import embed_tagging_data
 
     torch.manual_seed(1)

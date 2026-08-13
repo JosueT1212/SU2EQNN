@@ -6,7 +6,7 @@ Particle MV layout, channel 0: [E, px, py, pz, 0, 0, 0, 0]
   - py → index 2 (grade-1 e2)
   - pz → index 3 (grade-1 e3)
 
-Optional axis channels 1..K (R4 multi-axis bivector encoding):
+Optional axis channels 1..K (subjet-axis bivector injection, grade 2):
   channel 1+k = p⃗ ∧ n̂_k, pure grade-2 at indices 4 (e12), 5 (e13), 6 (e23),
   where n̂_k are per-jet unit reference axes (jet axis + exclusive-kT subjets).
 """
