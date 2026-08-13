@@ -63,13 +63,13 @@ pytest
 | Branch | Paper section | What it tests | Config |
 |---|---|---|---|
 | `main` | Sec. III.C (architecture) | Cl(3,0) transformer baseline, no injected features | `config/top_tagging.yaml` |
-| `r4-multiaxis-bivector` | Sec. III.D.1, "Grade 2: subjet-axis bivectors" | 4-channel wedge injection: jet axis + 3 exclusive-$k_T$ subjet axes | `config/top_tagging_r4.yaml` |
-| `r7-patch-injection` | Table I, "+ subjet-axis bivectors (patch, 189k)" | Same bivector signal re-injected at every block via an independent equivariant linear map, instead of only at the input embedding | `config/top_tagging_r7_patch.yaml` |
-| `r8-single-channel-ablation` | Sec. III.D.4 (`sec:r8`), "Grades 2 and 3: single-channel jet-axis injection" | Packs jet-axis bivector (variant a) or jet-axis bivector + pseudoscalar volume (variant b) into the single existing channel instead of adding new channels | `config/top_tagging_r8a.yaml` (a), `config/top_tagging_r8b.yaml` (b), `config/top_tagging_r8a_full.yaml` (a, full dataset) |
-| `r5a-pseudoscalar-triad` | Sec. III.D.2, "signed subjet triads" | Grade-3 injection: oriented volume $\chi=(\hat n_2\times\hat n_3)\cdot\hat n_4$ + per-constituent determinants | `config/top_tagging_r4.yaml` (pseudoscalar mode is compiled into `embedding.py` on this branch, not config-selected) |
-| `r5b-pseudoscalar-hand` | Sec. III.D.2, "local handedness" | Grade-3 injection: per-constituent screw-sense observable $\chi_i^{(k)}$ | `config/top_tagging_r4.yaml` |
-| `r5c-pseudoscalar-phase` | Sec. III.D.2, "splitting-plane phases" | Grade-3 injection: signed dihedral angle between successive Cambridge–Aachen splitting planes, $\sin(2\Delta\psi)$ and $\sin(\Delta\psi)$ variants | `config/top_tagging_r4.yaml` |
-| `r5d-subjet-mass` | Sec. III.D.3, "Grade 0: subjet invariant masses" | Scalar-slot injection: $[m_\mathrm{jet}, m_{s_1}, m_{s_2}, m_{s_3}]$ Casimir invariants | `config/top_tagging_r4.yaml` |
+| `r4-multiaxis-bivector` | Sec. III.D.1, "Grade 2: subjet-axis bivectors" | 4-channel wedge injection: jet axis + 3 exclusive-$k_T$ subjet axes | `config/top_tagging_grade2_bivectors.yaml` |
+| `r7-patch-injection` | Table I, "+ subjet-axis bivectors (patch, 189k)" | Same bivector signal re-injected at every block via an independent equivariant linear map, instead of only at the input embedding | `config/top_tagging_grade2_bivectors_patch.yaml` |
+| `r8-single-channel-ablation` | Sec. III.D.4 (`sec:r8`), "Grades 2 and 3: single-channel jet-axis injection" | Packs jet-axis bivector (variant a) or jet-axis bivector + pseudoscalar volume (variant b) into the single existing channel instead of adding new channels | `config/top_tagging_single_channel_axis_a.yaml` (a), `config/top_tagging_single_channel_axis_b.yaml` (b), `config/top_tagging_single_channel_axis_a_full.yaml` (a, full dataset) |
+| `r5a-pseudoscalar-triad` | Sec. III.D.2, "signed subjet triads" | Grade-3 injection: oriented volume $\chi=(\hat n_2\times\hat n_3)\cdot\hat n_4$ + per-constituent determinants | `config/top_tagging_pseudoscalar_triad.yaml` |
+| `r5b-pseudoscalar-hand` | Sec. III.D.2, "local handedness" | Grade-3 injection: per-constituent screw-sense observable $\chi_i^{(k)}$ | `config/top_tagging_pseudoscalar_handedness.yaml` |
+| `r5c-pseudoscalar-phase` | Sec. III.D.2, "splitting-plane phases" | Grade-3 injection: signed dihedral angle between successive Cambridge–Aachen splitting planes, $\sin(2\Delta\psi)$ and $\sin(\Delta\psi)$ variants | `config/top_tagging_pseudoscalar_phase.yaml` |
+| `r5d-subjet-mass` | Sec. III.D.3, "Grade 0: subjet invariant masses" | Scalar-slot injection: $[m_\mathrm{jet}, m_{s_1}, m_{s_2}, m_{s_3}]$ Casimir invariants | `config/top_tagging_scalar_masses.yaml` |
 
 Branches `r4-explore`, `r9-subjet-channel-vs-scalar`, and the `r10-*` family
 (rotor-attention) are exploratory/in-progress work not yet reported in the
@@ -88,51 +88,51 @@ python -m experiments.top_tagging.experiment --config-name top_tagging
 ### `r4-multiaxis-bivector` — subjet-axis bivectors (grade 2)
 ```bash
 python scripts/precompute_axes.py data/toptagging_mini.npz data/toptagging_mini_axes.npz
-python -m experiments.top_tagging.experiment --config-name top_tagging_r4
+python -m experiments.top_tagging.experiment --config-name top_tagging_grade2_bivectors
 ```
 
 ### `r7-patch-injection` — subjet-axis bivectors, patch variant (189k)
 ```bash
 python scripts/precompute_axes.py data/toptagging_mini.npz data/toptagging_mini_axes.npz
-python -m experiments.top_tagging.experiment --config-name top_tagging_r7_patch
+python -m experiments.top_tagging.experiment --config-name top_tagging_grade2_bivectors_patch
 ```
 
 ### `r8-single-channel-ablation` — single-channel jet-axis injection
 ```bash
 python scripts/precompute_axes.py data/toptagging_mini.npz data/toptagging_mini_axes.npz
 # variant (a): bivector only, empty pseudoscalar slot
-python -m experiments.top_tagging.experiment --config-name top_tagging_r8a
+python -m experiments.top_tagging.experiment --config-name top_tagging_single_channel_axis_a
 # variant (b): bivector + oriented-volume pseudoscalar, needs leading-constituent axis
 python scripts/precompute_leading.py data/toptagging_mini_axes.npz data/toptagging_mini_axes_leading.npz
-python -m experiments.top_tagging.experiment --config-name top_tagging_r8b
+python -m experiments.top_tagging.experiment --config-name top_tagging_single_channel_axis_b
 # variant (a), full dataset (data/toptagging_full_axes.npz, not distributed here)
-python -m experiments.top_tagging.experiment --config-name top_tagging_r8a_full
+python -m experiments.top_tagging.experiment --config-name top_tagging_single_channel_axis_a_full
 ```
 
 ### `r5a-pseudoscalar-triad` — signed subjet triads (grade 3)
 ```bash
 python scripts/precompute_axes.py data/toptagging_mini.npz data/toptagging_mini_axes.npz
-python -m experiments.top_tagging.experiment --config-name top_tagging_r4
+python -m experiments.top_tagging.experiment --config-name top_tagging_pseudoscalar_triad
 ```
 
 ### `r5b-pseudoscalar-hand` — local handedness (grade 3)
 ```bash
 python scripts/precompute_axes.py data/toptagging_mini.npz data/toptagging_mini_axes.npz
-python -m experiments.top_tagging.experiment --config-name top_tagging_r4
+python -m experiments.top_tagging.experiment --config-name top_tagging_pseudoscalar_handedness
 ```
 
 ### `r5c-pseudoscalar-phase` — splitting-plane phases (grade 3)
 ```bash
 python scripts/precompute_axes.py data/toptagging_mini.npz data/toptagging_mini_axes.npz
 python scripts/precompute_phases.py data/toptagging_mini_axes.npz data/toptagging_mini_axes.npz  # adds phases_* keys in place; config reads this same file
-python -m experiments.top_tagging.experiment --config-name top_tagging_r4
+python -m experiments.top_tagging.experiment --config-name top_tagging_pseudoscalar_phase
 ```
 
 ### `r5d-subjet-mass` — subjet invariant masses (grade 0)
 ```bash
 python scripts/precompute_axes.py data/toptagging_mini.npz data/toptagging_mini_axes.npz
 python scripts/precompute_masses.py data/toptagging_mini_axes.npz data/toptagging_mini_axes.npz  # adds masses_* keys in place; config reads this same file
-python -m experiments.top_tagging.experiment --config-name top_tagging_r4
+python -m experiments.top_tagging.experiment --config-name top_tagging_scalar_masses
 ```
 
 Training protocol for every mini-dataset run above: 30 epochs, Adam,
