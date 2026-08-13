@@ -6,7 +6,7 @@ Particle MV layout, channel 0: [E, px, py, pz, 0, 0, 0, 0]
   - py → index 2 (grade-1 e2)
   - pz → index 3 (grade-1 e3)
 
-Optional axis channels 1..K (R4 multi-axis bivector encoding):
+Optional axis channels 1..K (subjet-axis bivector injection, grade 2):
   channel 1+k = p⃗ ∧ n̂_k, pure grade-2 at indices 4 (e12), 5 (e13), 6 (e23),
   where n̂_k are per-jet unit reference axes (jet axis + exclusive-kT subjets).
 """
@@ -91,7 +91,7 @@ def embed_tagging_data(
         mv[:, 1:, 5] = p[..., 0] * ax[..., 2] - p[..., 2] * ax[..., 0]
         mv[:, 1:, 6] = p[..., 1] * ax[..., 2] - p[..., 2] * ax[..., 1]
 
-        # R5a pseudoscalar slots: jet-level triad handedness (channel 1, broadcast)
+        # Signed subjet triads (grade 3): jet-level triad handedness (channel 1, broadcast)
         # and per-particle signed volumes with jet+subjet axes (channels 2..K).
         # chi_triad is pure-axes (O(1), unit vectors) and is not rescaled.
         n_jet = axes_f[:, 0]                                     # (B, 3)
