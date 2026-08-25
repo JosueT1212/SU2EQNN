@@ -16,6 +16,7 @@ FIXTURE_DIR = "tests/fixtures"
 # variant -> (layout name, injector list)
 VARIANTS = {
     "r4": ("multi_channel", []),
+    "r5d": ("multi_channel", ["subjet_mass"]),
 }
 
 

@@ -55,3 +55,20 @@ def test_layout_mismatch_raises(fake_injectors, monkeypatch):
     )
     with pytest.raises(ValueError, match="requires layout 'single_channel'"):
         resolve("multi_channel", ["pinned"])
+
+
+def test_missing_aux_key_names_the_precompute_flag():
+    from types import SimpleNamespace
+    import torch
+    from experiments.top_tagging.embedding import build_embedding
+
+    cfg = SimpleNamespace(data=SimpleNamespace(
+        embedding="multi_channel", inject=["subjet_mass"],
+        two_beams=True, rescale_data=True,
+    ))
+    fourmomenta = torch.randn(5, 4)
+    ptr = torch.tensor([0, 5])
+    axes = torch.eye(3).repeat(2, 1)[:4].unsqueeze(0)   # (1, 4, 3)
+
+    with pytest.raises(ValueError, match="--features masses"):
+        build_embedding(cfg, fourmomenta, ptr, {"axes": axes})

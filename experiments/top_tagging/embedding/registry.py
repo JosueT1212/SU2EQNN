@@ -37,7 +37,17 @@ LAYOUTS = {
     "multi_channel": layouts.multi_channel,
 }
 
-INJECTORS = {}
+INJECTORS = {
+    "subjet_mass": Injector(
+        name="subjet_mass",
+        fn=injectors.subjet_mass,
+        slot=0,
+        channels=AXIS_FIRST4,
+        requires_aux=("masses",),
+        requires_layout="multi_channel",
+        requires_k=4,
+    ),
+}
 
 
 def resolve(layout_name: str, inject_names):
