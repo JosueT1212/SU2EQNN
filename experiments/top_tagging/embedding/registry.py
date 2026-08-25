@@ -35,6 +35,7 @@ class Injector:
 
 LAYOUTS = {
     "multi_channel": layouts.multi_channel,
+    "single_channel": layouts.single_channel,
 }
 
 INJECTORS = {
@@ -72,6 +73,14 @@ INJECTORS = {
         requires_aux=("phases",),
         requires_layout="multi_channel",
         requires_k=4,
+    ),
+    "lead_pseudoscalar": Injector(
+        name="lead_pseudoscalar",
+        fn=injectors.lead_pseudoscalar,
+        slot=7,
+        channels=CH0,
+        requires_aux=("axes", "p_lead"),
+        requires_layout="single_channel",
     ),
 }
 

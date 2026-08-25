@@ -101,3 +101,20 @@ def ca_phase(mv, fourmomenta, ptr, particle_batch, aux, rescale) -> None:
     """
     phases = aux["phases"].to(mv.dtype)
     mv[:, 1:5, 7] = phases[particle_batch]
+
+
+def lead_pseudoscalar(mv, fourmomenta, ptr, particle_batch, aux, rescale) -> None:
+    """Pseudoscalar volume I = p⃗ · (n̂_jet × p̂_lead) into slot 7 of channel 0 (r8).
+
+    p_lead is the highest-pT constituent's 4-momentum; only its direction is
+    used, so the value is scale-free apart from p⃗ itself.
+    """
+    ax = aux["axes"].to(mv.dtype)[:, 0, :][particle_batch]   # (n_particles, 3)
+    p = fourmomenta[:, 1:4].to(mv.dtype)
+    if rescale:
+        p = p / UNITS
+    pl = aux["p_lead"][:, 1:4].to(mv.dtype)
+    pl_norm = pl.norm(dim=-1, keepdim=True).clamp_min(1e-12)
+    pl_hat = (pl / pl_norm)[particle_batch]                  # (n_particles, 3)
+    cross = torch.cross(ax, pl_hat, dim=-1)
+    mv[:, 0, 7] = (p * cross).sum(dim=-1)

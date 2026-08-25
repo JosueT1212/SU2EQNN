@@ -20,6 +20,7 @@ VARIANTS = {
     "r5a": ("multi_channel", ["triad_handedness"]),
     "r5b": ("multi_channel", ["local_handedness"]),
     "r5c": ("multi_channel", ["ca_phase"]),
+    "r8": ("single_channel", ["lead_pseudoscalar"]),
 }
 
 
@@ -45,3 +46,17 @@ def test_matches_branch_fixture(variant):
     assert set(got) >= set(expected)
     for key, want in expected.items():
         assert torch.equal(got[key], want), f"{variant}: {key} differs"
+
+
+def test_single_channel_without_injector_leaves_slot7_zero():
+    fx = torch.load(f"{FIXTURE_DIR}/r8.pt", weights_only=False)
+    inputs = fx["inputs"]
+    aux = {k: v for k, v in inputs.items() if k not in ("fourmomenta", "ptr")}
+
+    got = build_embedding(
+        _cfg("single_channel", []), inputs["fourmomenta"], inputs["ptr"], aux
+    )
+    assert got["mv"].shape[1] == 1
+    assert torch.equal(got["mv"][:, 0, 7], torch.zeros_like(got["mv"][:, 0, 7]))
+    # slots 0-6 are unaffected by the injector's presence
+    assert torch.equal(got["mv"][..., :7], fx["outputs"]["mv"][..., :7])
