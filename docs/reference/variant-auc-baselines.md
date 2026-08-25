@@ -103,21 +103,37 @@ config, not a repeat of the untracked number. The 0.0005 gap is not being
 scored pass/fail (the 0.9786 run was unseeded, this one seeded at 0) — it
 is reported as a number.
 
-**IMPORTANT — r5c has a committed baseline and was not checked against it
-below.** This doc's own opening line says "Only `r5c` has tracked, recorded
-results" — `r5c-pseudoscalar-phase`'s `outputs/pseudoscalar_phase_mini/experiment.log`
+**IMPORTANT — r5c has a committed baseline, now reproduced.** This doc's
+own opening line says "Only `r5c` has tracked, recorded results" —
+`r5c-pseudoscalar-phase`'s `outputs/pseudoscalar_phase_mini/experiment.log`
 is tracked in that branch's git history and ends `Test AUC=0.9770 |
 accuracy=0.9260` (30 epochs, `data.path=data/toptagging_mini_axes_phases.npz`,
 per the branch's committed `.hydra/overrides.yaml`). This is a *stronger*
 baseline than r4's (which is untracked-only), and it was missed when Task
 12's AUC step was rescoped to "only r4 has a recorded number." The r5c row
 in the paired-run table below is a 1-epoch, 2000-jet **subset** run
-(0.7519 vs. 0.7603) — it does not test the same thing as 0.9770 and cannot
-be read against it. **Reproduction against 0.9770 is pending a full
-30-epoch run over the real axes+phases mini dataset**; see the addendum at
-the end of this section for the result once available. Until that addendum
-is filled in, r5c should be treated the same as r4: a variant with a real
-recorded baseline that the branch is not yet safe to delete against.
+(0.7519 vs. 0.7603) — it does not test the same thing as 0.9770 and was
+never meant to be read against it.
+
+**Reproduction result:** `config/top_tagging_pseudoscalar_phase.yaml`, 30
+epochs, unified code, run against a **regenerated**
+`data/toptagging_mini_axes_phases.npz` (the original file no longer existed
+on disk; it was regenerated for this reproduction — the regenerating
+script's `_compute_phases` body was byte-verified against branch
+`r5c-pseudoscalar-phase`'s own `precompute_phases.py` back in Task 2, which
+is why this regenerated aux file is trustworthy rather than a fresh,
+unverified reimplementation), `data.path` passed as a runtime override, not
+committed to the config. Log: `outputs/unified_r5c_full.log`.
+
+**Test AUC = 0.9757, accuracy = 0.9200**, vs. the committed 0.9770 / 0.9260
+— a difference of -0.0013 AUC. Reported as a number, not graded pass/fail:
+the recorded 0.9770 run was itself unseeded, so a gap this size is within
+seed-to-seed spread on this training path.
+
+**Both recorded baselines in this project are now reproduced**: r4 at
+0.9781 vs. its untracked 0.9786, and r5c at 0.9757 vs. its committed
+0.9770. No other variant in this project has a recorded ground-truth AUC
+to reproduce against.
 
 ### Paired short runs: unified vs. source branch, all eight variants
 
@@ -145,7 +161,7 @@ one-sided seeding, not evidence about the training path.
 | r4 | 0.9637 | 0.9629 | unified only | 1 epoch, mini; re-derived, log at `outputs/pair_branch_r4.log` |
 | r5a | 0.9594 | 0.9622 | unified only | 1 epoch, mini |
 | r5b | 0.9658 | 0.9646 | unified only | 1 epoch, mini |
-| r5c | 0.7519 | 0.7603 | unified only | 1 epoch, **subset** (2000/500/500 jets) — **not comparable to the committed 0.9770 baseline; see the callout above and the addendum below** |
+| r5c | 0.7519 | 0.7603 | unified only | 1 epoch, **subset** (2000/500/500 jets) — **not comparable to the committed 0.9770 baseline; see the full 30-epoch reproduction (0.9757) in the callout above and the addendum below** |
 | r5d | 0.9254 | 0.9254 | unified only | 1 epoch, **subset**; exact match despite the branch being unseeded |
 | r7 | 0.9571 | 0.9545 | unified only | 1 epoch, mini |
 | r8 | 0.9236 | 0.9381 | unified only | 1 epoch, mini path/optimizer overridden (see report — the checked-in config needs the full dataset and `lion_pytorch`, neither available; also the unified half inherited `validate_every_n_steps=5000` from that config, so it never checkpointed a "best" model and was evaluated on its final-epoch weights instead, unlike the branch half) |
@@ -257,21 +273,34 @@ requested, whereas the unified registry only turns it on when
 shared, multi-key aux file (as this sweep did) against branch code that
 infers behavior from data presence should expect this class of surprise.
 
-## Addendum (in progress at disclosure-commit time)
+**Note, to avoid a false read:** the variant-b re-run is a *different*
+pairing (both sides told to inject `lead_pseudoscalar`), not a re-run of
+the variant-a pairing — it does not "fix" or supersede the variant-a
+divergence. The variant-a logs (`outputs/parity_unified_r8.log`, Test
+AUC=0.7828; `outputs/parity_branch_r8.log`, Test AUC=0.7761) are untouched
+and still diverge end to end, distinct files from the variant-b logs
+(`outputs/parity_unified_r8b.log` / `outputs/parity_branch_r8b.log`, both
+0.7761/0.6460). That branch-side variant-a Test AUC (0.7761) happens to
+equal the variant-b matched value — a coincidence of these particular
+numbers, not evidence that variant-a matched.
+
+## Addendum (all items closed)
 
 - **r4 full-mini reproduction (vs. 0.9786): DONE.** `config/top_tagging_grade2_bivectors.yaml`,
   30 epochs, `training.seed: 0`, unified code. Log:
   `outputs/unified_top_tagging_grade2_bivectors_full.log`. **Test AUC=0.9781,
   accuracy=0.9250** vs. the untracked 0.9786/0.9245 — a -0.0005 AUC
   difference, reported plainly and not graded pass/fail.
-- **r5c full-mini reproduction (vs. 0.9770):** blocked on regenerating
-  `data/toptagging_mini_axes_phases.npz` (removed from disk; the full
-  24000-jet `phases` precompute is a pure-Python, roughly-cubic-per-jet
-  computation and takes a long time). Once it exists, the plan is to run
-  `config/top_tagging_pseudoscalar_phase.yaml` for the full 30 epochs with
-  `data.path` overridden at the command line to that file (not committed to
-  the config) and report the final test AUC against 0.9770. Result to be
-  filled in once it finishes.
+- **r5c full-mini reproduction (vs. 0.9770): DONE.** `config/top_tagging_pseudoscalar_phase.yaml`,
+  30 epochs, unified code, `data.path=data/toptagging_mini_axes_phases.npz`
+  (regenerated — the original file no longer existed on disk; the
+  regenerating script's `_compute_phases` body was byte-verified against
+  branch `r5c-pseudoscalar-phase`'s own `precompute_phases.py` in Task 2,
+  so this regenerated aux is trustworthy) passed as a runtime override, not
+  committed to the config. Log: `outputs/unified_r5c_full.log`. **Test
+  AUC=0.9757, accuracy=0.9200** vs. the committed 0.9770/0.9260 — a
+  -0.0013 AUC difference, reported plainly and not graded pass/fail (the
+  committed 0.9770 run was itself unseeded).
 - **r4's branch-side paired number: RESOLVED.** The original 0.9602 was
   struck (its worktree was removed before the log was copied out). A fresh
   re-run of the same pairing (`r4-multiaxis-bivector`,
