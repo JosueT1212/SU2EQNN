@@ -11,6 +11,8 @@ from torch_geometric.data import Data
 
 EPS = 1e-5
 
+AUX_KEYS = {"axes": "axes", "masses": "masses", "phases": "phases", "p_lead": "p_lead"}
+
 
 class TopTaggingDataset(torch.utils.data.Dataset):
     """Binary jet classification dataset using torch_geometric Data objects.
@@ -37,13 +39,22 @@ class TopTaggingDataset(torch.utils.data.Dataset):
         kinematics = torch.tensor(raw[f"kinematics_{mode}"], dtype=dtype)
         labels = torch.tensor(raw[f"labels_{mode}"], dtype=torch.bool)
 
+        aux = {
+            attr: torch.tensor(raw[f"{key}_{mode}"], dtype=dtype)
+            for key, attr in AUX_KEYS.items()
+            if f"{key}_{mode}" in raw.files
+        }
+
         self.data_list = []
         for i in range(kinematics.shape[0]):
             # drop zero-padded particles: keep rows where any |component| > EPS
             mask = (kinematics[i].abs() > EPS).any(dim=-1)
             fourmomenta = kinematics[i][mask]   # (n_real, 4)
             label = labels[i]                    # scalar bool
-            self.data_list.append(Data(x=fourmomenta, label=label))
+            data = Data(x=fourmomenta, label=label)
+            for attr, tensor in aux.items():
+                setattr(data, attr, tensor[i].unsqueeze(0))
+            self.data_list.append(data)
 
     def __len__(self):
         return len(self.data_list)

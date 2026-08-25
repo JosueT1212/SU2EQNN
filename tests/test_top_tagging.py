@@ -105,6 +105,31 @@ def test_dataset_fourmomenta_dtype():
     assert ds[0].x.dtype == torch.float32
 
 
+def test_dataset_loads_axes(tmp_path):
+    """Data objects carry per-jet axes (1,4,3) when npz contains axes_{mode}."""
+    import numpy as np
+    import torch
+    from experiments.top_tagging.dataset import TopTaggingDataset
+
+    n_jets = 3
+    kin = np.zeros((n_jets, 10, 4), dtype=np.float32)
+    kin[:, 0] = [10.0, 1.0, 0.0, 9.0]
+    kin[:, 1] = [10.0, -1.0, 0.5, 9.0]
+    labels = np.array([True, False, True])
+    axes = np.tile(np.eye(3, dtype=np.float32)[None, :3], (n_jets, 1, 1))
+    axes = np.concatenate([axes, axes[:, :1]], axis=1)   # (n_jets, 4, 3)
+
+    path = tmp_path / "mini_axes.npz"
+    np.savez(path, kinematics_train=kin, labels_train=labels, axes_train=axes)
+
+    ds = TopTaggingDataset(rescale_data=True)
+    ds.load_data(str(path), "train")
+    d = ds[0]
+    assert hasattr(d, "axes")
+    assert d.axes.shape == (1, 4, 3)
+    assert torch.allclose(d.axes[0], torch.tensor(axes[0]))
+
+
 # ---------------------------------------------------------------------------
 # Task 4: Embedding
 # ---------------------------------------------------------------------------
@@ -329,3 +354,48 @@ def test_smoke_one_training_step():
     # parameters changed after optimizer step
     p0 = next(model.parameters())
     assert p0.grad is not None
+
+
+def test_warm_restart_scheduler_resets_lr():
+    """CosineAnnealingWarmRestarts: LR decays within a cycle, resets at T_0."""
+    import torch
+
+    param = torch.nn.Parameter(torch.zeros(1))
+    opt = torch.optim.Adam([param], lr=1.0e-3)
+    sched = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(
+        opt, T_0=10, T_mult=1, eta_min=1.0e-5
+    )
+    lrs = []
+    for _ in range(20):
+        opt.step()
+        sched.step()
+        lrs.append(opt.param_groups[0]["lr"])
+    assert lrs[8] < 1.0e-4, f"LR should be near eta_min before restart, got {lrs[8]}"
+    assert lrs[9] > 9.0e-4, f"LR should reset to ~initial at T_0, got {lrs[9]}"
+
+
+def test_dataset_loads_all_present_aux_keys(tmp_path):
+    """Any known aux key in the npz reaches the Data object; absent ones don't."""
+    import numpy as np
+    from experiments.top_tagging.dataset import TopTaggingDataset
+
+    n, n_pad = 3, 6
+    rng = np.random.default_rng(7)
+    kin = np.zeros((n, n_pad, 4), dtype=np.float32)
+    kin[:, :4, :] = rng.normal(size=(n, 4, 4)).astype(np.float32) + 10.0
+    path = tmp_path / "toy.npz"
+    np.savez(
+        path,
+        kinematics_test=kin,
+        labels_test=np.array([0, 1, 0], dtype=bool),
+        axes_test=rng.normal(size=(n, 4, 3)).astype(np.float32),
+        masses_test=rng.random((n, 4)).astype(np.float32),
+    )
+
+    ds = TopTaggingDataset(rescale_data=True)
+    ds.load_data(str(path), "test")
+
+    assert ds[0].axes.shape == (1, 4, 3)
+    assert ds[0].masses.shape == (1, 4)
+    assert not hasattr(ds[0], "phases")
+    assert not hasattr(ds[0], "p_lead")
