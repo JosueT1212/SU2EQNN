@@ -47,6 +47,14 @@ INJECTORS = {
         requires_layout="multi_channel",
         requires_k=4,
     ),
+    "triad_handedness": Injector(
+        name="triad_handedness",
+        fn=injectors.triad_handedness,
+        slot=7,
+        channels=AXIS_ALL,
+        requires_aux=("axes",),
+        requires_layout="multi_channel",
+    ),
 }
 
 
