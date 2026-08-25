@@ -21,6 +21,7 @@ VARIANTS = {
     "r5b": ("multi_channel", ["local_handedness"]),
     "r5c": ("multi_channel", ["ca_phase"]),
     "r8": ("single_channel", ["lead_pseudoscalar"]),
+    "r9": ("hybrid_r9", ["cos_theta"]),
 }
 
 
@@ -60,3 +61,15 @@ def test_single_channel_without_injector_leaves_slot7_zero():
     assert torch.equal(got["mv"][:, 0, 7], torch.zeros_like(got["mv"][:, 0, 7]))
     # slots 0-6 are unaffected by the injector's presence
     assert torch.equal(got["mv"][..., :7], fx["outputs"]["mv"][..., :7])
+
+
+def test_hybrid_r9_without_cos_theta_leaves_ch0_slot4_zero():
+    fx = torch.load(f"{FIXTURE_DIR}/r9.pt", weights_only=False)
+    inputs = fx["inputs"]
+    aux = {k: v for k, v in inputs.items() if k not in ("fourmomenta", "ptr")}
+
+    got = build_embedding(
+        _cfg("hybrid_r9", []), inputs["fourmomenta"], inputs["ptr"], aux
+    )
+    assert torch.equal(got["mv"][:, 0, 4], torch.zeros_like(got["mv"][:, 0, 4]))
+    assert torch.equal(got["mv"][:, 1:], fx["outputs"]["mv"][:, 1:])

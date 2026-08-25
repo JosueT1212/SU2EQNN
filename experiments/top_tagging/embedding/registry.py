@@ -36,6 +36,7 @@ class Injector:
 LAYOUTS = {
     "multi_channel": layouts.multi_channel,
     "single_channel": layouts.single_channel,
+    "hybrid_r9": layouts.hybrid_r9,
 }
 
 INJECTORS = {
@@ -81,6 +82,15 @@ INJECTORS = {
         channels=CH0,
         requires_aux=("axes", "p_lead"),
         requires_layout="single_channel",
+    ),
+    "cos_theta": Injector(
+        name="cos_theta",
+        fn=injectors.cos_theta,
+        slot=4,
+        channels=CH0,
+        requires_aux=("axes",),
+        requires_layout="hybrid_r9",
+        requires_k=4,
     ),
 }
 

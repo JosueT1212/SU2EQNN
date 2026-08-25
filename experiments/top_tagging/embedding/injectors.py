@@ -118,3 +118,18 @@ def lead_pseudoscalar(mv, fourmomenta, ptr, particle_batch, aux, rescale) -> Non
     pl_hat = (pl / pl_norm)[particle_batch]                  # (n_particles, 3)
     cross = torch.cross(ax, pl_hat, dim=-1)
     mv[:, 0, 7] = (p * cross).sum(dim=-1)
+
+
+def cos_theta(mv, fourmomenta, ptr, particle_batch, aux, rescale) -> None:
+    """Invariant cos(theta) against the highest-pT subjet, into ch0 slot 4 (r9).
+
+    cos_theta = p̂ · n̂_sub_highest, where n̂_sub_highest is axes[:, 1]. Scale
+    free by construction: the momentum is normalized before the dot product,
+    so rescale does not change the value.
+    """
+    p = fourmomenta[:, 1:4].to(mv.dtype)
+    if rescale:
+        p = p / UNITS
+    p_norm = p.norm(dim=-1).clamp_min(1e-12)
+    ax_highest = aux["axes"][:, 1, :].to(mv.dtype)[particle_batch]
+    mv[:, 0, 4] = (p * ax_highest).sum(dim=-1) / p_norm

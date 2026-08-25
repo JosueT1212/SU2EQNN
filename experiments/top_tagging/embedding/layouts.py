@@ -76,3 +76,38 @@ def single_channel(fourmomenta, ptr, aux, two_beams=True, rescale=True):
     mv[:, 0, 6] = p[:, 1] * ax[:, 2] - p[:, 2] * ax[:, 1]   # e23
 
     return mv, {}
+
+
+def hybrid_r9(fourmomenta, ptr, aux, two_beams=True, rescale=True):
+    """r9 layout: 4 channels, subjet-highest axis reserved for the scalar.
+
+    Channel 0 holds kinematics (slot 4 is left for the cos_theta injector);
+    channels 1-3 hold p⃗ ∧ n̂ for the jet axis, and the two remaining subjet
+    axes axes[:, 2] and axes[:, 3]. axes[:, 1] — the highest-pT subjet — is
+    deliberately absent here; it feeds the cos_theta injector instead.
+    """
+    axes = aux.get("axes")
+    if axes is None:
+        raise ValueError("hybrid_r9 layout requires aux['axes']")
+    n_channels = 4
+
+    if rescale:
+        fourmomenta = fourmomenta / UNITS
+
+    mv = torch.zeros(
+        fourmomenta.shape[0], n_channels, 8,
+        dtype=fourmomenta.dtype, device=fourmomenta.device,
+    )
+    mv[:, 0, 0] = fourmomenta[:, 0]
+    mv[:, 0, 1:4] = fourmomenta[:, 1:4]
+
+    particle_batch = get_batch_from_ptr(ptr)
+    p = fourmomenta[:, 1:4]                                 # (n_particles, 3)
+
+    wedge_axes = torch.cat(
+        [axes[:, 0].unsqueeze(1), axes[:, 2:4]], dim=1
+    ).to(fourmomenta.dtype)                                 # (batchsize, 3, 3)
+    ax = wedge_axes[particle_batch]                         # (n_particles, 3, 3)
+    wedge_into(mv, slice(1, None), p.unsqueeze(1), ax)
+
+    return mv, {}
