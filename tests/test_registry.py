@@ -72,3 +72,9 @@ def test_missing_aux_key_names_the_precompute_flag():
 
     with pytest.raises(ValueError, match="--features masses"):
         build_embedding(cfg, fourmomenta, ptr, {"axes": axes})
+
+
+def test_two_slot7_injectors_collide():
+    from experiments.top_tagging.embedding.registry import resolve
+    with pytest.raises(ValueError, match="both write slot 7"):
+        resolve("multi_channel", ["triad_handedness", "local_handedness"])
