@@ -618,6 +618,258 @@ def test_gatr_equivariance():
             f"GATr scalar invariance failed: {(path1_s - out_s).abs().max():.2e}"
 
 
+
+# ---------------------------------------------------------------------------
+# Registry sweep: every registered layout/injector combination
+# ---------------------------------------------------------------------------
+#
+# Every registered layout/injector combination must be Spin(3)-equivariant.
+#
+# A rotation R acting on the input momenta and on the reference axes must act
+# on the output multivectors by the corresponding rotor: grade-1 slots rotate
+# as vectors, grade-2 slots as bivectors, and grade-0/grade-3 slots are
+# invariant.
+#
+# Caveat: the kT subjet axes and the C/A tree are computed in the beam frame,
+# so *precomputed* aux is only equivariant under azimuthal rotations in
+# production. This test rotates the aux tensors explicitly, which isolates
+# the embedding's own equivariance -- the property being asserted -- from the
+# aux producer's frame dependence.
+
+import pytest
+
+from experiments.top_tagging.embedding import build_embedding
+from tests.test_embedding_equivalence import VARIANTS, _cfg
+
+FIXTURE_DIR = "tests/fixtures"
+
+
+def _random_rotation(seed):
+    """Uniform-ish SO(3) element via QR of a Gaussian matrix, det forced to +1."""
+    g = torch.Generator().manual_seed(seed)
+    q, r = torch.linalg.qr(torch.randn(3, 3, generator=g, dtype=torch.float64))
+    q = q * torch.sign(torch.diagonal(r)).unsqueeze(0)
+    if torch.det(q) < 0:
+        q[:, 0] = -q[:, 0]
+    return q.to(torch.float32)
+
+
+@pytest.mark.parametrize("variant", sorted(VARIANTS))
+@pytest.mark.parametrize("seed", [1, 2])
+def test_scalar_slots_are_rotation_invariant(variant, seed):
+    """Grade-0 (slot 0) and grade-3 (slot 7) outputs must not change under R."""
+    layout, inject = VARIANTS[variant]
+    fx = torch.load(f"{FIXTURE_DIR}/{variant}.pt", weights_only=False)
+    inputs = fx["inputs"]
+    aux = {k: v for k, v in inputs.items() if k not in ("fourmomenta", "ptr")}
+    cfg = _cfg(layout, inject)
+
+    plain = build_embedding(cfg, inputs["fourmomenta"], inputs["ptr"], aux)
+
+    R = _random_rotation(seed)
+    rot_fm = inputs["fourmomenta"].clone()
+    rot_fm[:, 1:4] = rot_fm[:, 1:4] @ R.T
+    rot_aux = dict(aux)
+    rot_aux["axes"] = aux["axes"] @ R.T
+    if "p_lead" in aux:
+        pl = aux["p_lead"].clone()
+        pl[:, 1:4] = pl[:, 1:4] @ R.T
+        rot_aux["p_lead"] = pl
+
+    rotated = build_embedding(cfg, rot_fm, inputs["ptr"], rot_aux)
+
+    for slot in (0, 7):
+        assert torch.allclose(
+            plain["mv"][..., slot], rotated["mv"][..., slot], atol=1e-4
+        ), f"{variant}: slot {slot} is not rotation invariant"
+
+
+# ---------------------------------------------------------------------------
+# Patch pathway (r7): equivariance tests ported from r7-patch-injection,
+# which were outside the checkout list for the earlier porting task and were
+# never carried over. The embedding-level pair below is adapted to the
+# current API: build_embedding(cfg, ...) with embedding="patch", and
+# patch_mv as a returned key (r7's branch had a standalone
+# embed_tagging_data_bivector_patch function that returned patch_mv
+# directly). The GATr-net-level pair is ported verbatim: su2eqnn.nets.gatr
+# already exposes patch_mv_channels/patch_mv unchanged from r7.
+# ---------------------------------------------------------------------------
+
+def test_build_embedding_patch_channels():
+    """patch layout: mv is plain (channel-0-only); patch_mv carries the wedges.
+
+    Not covered by the parametrized sweep above, which only checks slots 0
+    and 7 of "mv" -- it never inspects "patch_mv" at all.
+    """
+    from experiments.top_tagging.embedding import UNITS
+
+    fourmomenta = torch.tensor([
+        [40.0, 3.0, 0.0, 4.0],
+        [10.0, 0.0, 1.0, 2.0],
+        [20.0, 1.0, 1.0, 5.0],
+    ])
+    ptr = torch.tensor([0, 2, 3])
+    axes = torch.zeros(2, 4, 3)
+    axes[:, :, 2] = 1.0   # all axes = +z
+
+    cfg = _cfg("patch", [])
+    out = build_embedding(cfg, fourmomenta, ptr, {"axes": axes})
+    mv = out["mv"]
+    patch_mv = out["patch_mv"]
+
+    assert mv.shape[1] == 1, f"expected plain 1-channel mv, got {mv.shape[1]}"
+    assert patch_mv.shape[1] == 4, f"expected 4 patch channels, got {patch_mv.shape[1]}"
+
+    particles_mv = mv[~out["is_beam"]]          # (3, 1, 8)
+    particles_patch = patch_mv[~out["is_beam"]]  # (3, 4, 8)
+    p = fourmomenta / UNITS
+
+    # mv channel 0: E, px, py, pz -- identical to the plain kinematic channel
+    assert torch.allclose(particles_mv[:, 0, 0], p[:, 0], atol=1e-6)
+    assert torch.allclose(particles_mv[:, 0, 1:4], p[:, 1:4], atol=1e-6)
+
+    # patch_mv with n̂ = +z: wedge = px*e13 + py*e23
+    for k in range(4):
+        assert particles_patch[:, k, 4].abs().max() < 1e-6
+        assert torch.allclose(particles_patch[:, k, 5], p[:, 1], atol=1e-6)
+        assert torch.allclose(particles_patch[:, k, 6], p[:, 2], atol=1e-6)
+        assert particles_patch[:, k, 0:4].abs().max() < 1e-6, "patch channels must be pure grade-2"
+        assert particles_patch[:, k, 7].abs().max() < 1e-6
+
+    # spurion tokens: mv has normal beam content, patch_mv is exactly zero
+    beams_patch = patch_mv[out["is_beam"]]
+    assert beams_patch.abs().max() < 1e-6, "patch_mv must be zero on spurion tokens"
+
+
+def test_build_embedding_patch_equivariance():
+    """Rotating momenta AND axes rotates both mv and patch_mv by ρ(w).
+
+    Not covered by the parametrized sweep above: the sweep only checks that
+    the invariant slots (0, 7) of "mv" are unchanged; it does not check the
+    full bivector transformation law, and it never touches "patch_mv".
+    """
+    from su2eqnn.interface.vector import embed_vector, extract_vector
+
+    def rotate3(w, v):
+        """Rotate 3-vectors (n,3) via the Spin(3) sandwich on grade-1."""
+        return torch.stack([extract_vector(spin3_action(w, embed_vector(v[i])))
+                            for i in range(v.shape[0])])
+
+    cfg = _cfg("patch", [])
+    cfg.data.two_beams = False
+    cfg.data.rescale_data = False
+
+    for _ in range(10):
+        fourmomenta = torch.randn(6, 4)
+        ptr = torch.tensor([0, 3, 6])
+        axes = torch.randn(2, 4, 3)
+        axes = axes / axes.norm(dim=-1, keepdim=True)
+        w = random_spin3()
+
+        out = build_embedding(cfg, fourmomenta, ptr, {"axes": axes})
+
+        rot_p = fourmomenta.clone()
+        rot_p[:, 1:4] = rotate3(w, fourmomenta[:, 1:4])
+        rot_axes = torch.stack([rotate3(w, axes[j]) for j in range(axes.shape[0])])
+        out_rot = build_embedding(cfg, rot_p, ptr, {"axes": rot_axes})
+
+        # Beam spurion tokens are fixed lab-frame directions (unaffected by
+        # rotating fourmomenta/axes) and are therefore not equivariant under
+        # a general Spin(3) rotation by construction -- only particle tokens
+        # are expected to satisfy the equivariance check here.
+        mask = ~out["is_beam"]
+        expected_mv = spin3_action_channels(w, out["mv"])
+        expected_patch = spin3_action_channels(w, out["patch_mv"])
+
+        assert torch.allclose(out_rot["mv"][mask], expected_mv[mask], atol=1e-4), \
+            f"patch mv equivariance failed: {(out_rot['mv'][mask] - expected_mv[mask]).abs().max():.2e}"
+        assert torch.allclose(out_rot["patch_mv"][mask], expected_patch[mask], atol=1e-4), \
+            f"patch_mv equivariance failed: {(out_rot['patch_mv'][mask] - expected_patch[mask]).abs().max():.2e}"
+
+
+def test_gatr_patch_mv_equivariance():
+    """GATr with patch injection commutes with Spin(3) when momenta AND patch_mv co-rotate."""
+    from su2eqnn.layers.attention.config import SelfAttentionConfig
+    from su2eqnn.layers.mlp.config import MLPConfig
+    from su2eqnn.nets.gatr import GATr
+
+    ITEMS = 5
+    IN_MV, OUT_MV, HIDDEN_MV, PATCH_MV = 1, 1, 4, 4
+
+    net = GATr(
+        in_mv_channels=IN_MV,
+        out_mv_channels=OUT_MV,
+        hidden_mv_channels=HIDDEN_MV,
+        in_s_channels=None,
+        out_s_channels=None,
+        hidden_s_channels=None,
+        attention=SelfAttentionConfig(num_heads=2, multi_query=True, pos_encoding=False),
+        mlp=MLPConfig(activation="gelu"),
+        num_blocks=2,
+        patch_mv_channels=PATCH_MV,
+    )
+    net.eval()
+
+    for _ in range(N_TESTS):
+        x_mv = torch.randn(BATCH, ITEMS, IN_MV, 8)
+        patch_mv = torch.randn(BATCH, ITEMS, PATCH_MV, 8)
+        w = random_spin3()
+
+        def act(mv):
+            return torch.stack(
+                [spin3_action(w, mv[..., c, :]) for c in range(mv.shape[-2])], dim=-2
+            )
+
+        out_mv, _ = net(x_mv, scalars=None, patch_mv=patch_mv)
+        path1_mv, _ = net(act(x_mv), scalars=None, patch_mv=act(patch_mv))
+        path2_mv = act(out_mv)
+
+        assert torch.allclose(path1_mv, path2_mv, atol=1e-4), \
+            f"GATr patch equivariance failed: {(path1_mv - path2_mv).abs().max():.2e}"
+
+
+def test_gatr_patch_mv_equivariance_through_shared_embed():
+    """Two-stage patch pathway (shared embed then per-block proj) stays Spin(3)-equivariant
+    when hidden_mv_channels != patch_mv_channels (exercises the actual bottleneck reshape)."""
+    from su2eqnn.layers.attention.config import SelfAttentionConfig
+    from su2eqnn.layers.mlp.config import MLPConfig
+    from su2eqnn.nets.gatr import GATr
+
+    ITEMS = 5
+    IN_MV, OUT_MV, HIDDEN_MV, PATCH_MV = 1, 1, 6, 4
+
+    net = GATr(
+        in_mv_channels=IN_MV,
+        out_mv_channels=OUT_MV,
+        hidden_mv_channels=HIDDEN_MV,
+        in_s_channels=None,
+        out_s_channels=None,
+        hidden_s_channels=None,
+        attention=SelfAttentionConfig(num_heads=2, multi_query=True, pos_encoding=False),
+        mlp=MLPConfig(activation="gelu"),
+        num_blocks=2,
+        patch_mv_channels=PATCH_MV,
+    )
+    net.eval()
+
+    for _ in range(N_TESTS):
+        x_mv = torch.randn(BATCH, ITEMS, IN_MV, 8)
+        patch_mv = torch.randn(BATCH, ITEMS, PATCH_MV, 8)
+        w = random_spin3()
+
+        def act(mv):
+            return torch.stack(
+                [spin3_action(w, mv[..., c, :]) for c in range(mv.shape[-2])], dim=-2
+            )
+
+        out_mv, _ = net(x_mv, scalars=None, patch_mv=patch_mv)
+        path1_mv, _ = net(act(x_mv), scalars=None, patch_mv=act(patch_mv))
+        path2_mv = act(out_mv)
+
+        assert torch.allclose(path1_mv, path2_mv, atol=1e-4), \
+            f"GATr shared-embed patch equivariance failed: {(path1_mv - path2_mv).abs().max():.2e}"
+
+
 if __name__ == "__main__":
     test_spin3_inverse()
     test_spin3_norm_preservation()
@@ -645,4 +897,9 @@ if __name__ == "__main__":
     test_gatr_block_equivariance()
     test_gatr_block_no_scalars_equivariance()
     test_gatr_equivariance()
+    test_build_embedding_patch_channels()
+    test_build_embedding_patch_equivariance()
+    test_gatr_patch_mv_equivariance()
+    test_gatr_patch_mv_equivariance_through_shared_embed()
     print("All equivariance tests passed.")
+
