@@ -1,8 +1,16 @@
 """Capture a branch's embedding output as a regression fixture.
 
-Run from inside a worktree checked out to the variant's branch:
+Run from inside a worktree checked out to the variant's branch. `experiments/`
+is not part of the editable-installed package, so the repo root must be on
+PYTHONPATH explicitly:
 
-    .venv/bin/python scripts/capture_embedding_fixtures.py r5d /abs/path/to/tests/fixtures
+    PYTHONPATH=$(pwd) .venv/bin/python scripts/capture_embedding_fixtures.py r5d /abs/path/to/tests/fixtures
+
+If the branch already has a worktree checked out elsewhere (e.g. a long-lived
+dev worktree), `git worktree add` needs `--force` to add a second, independent
+worktree at the same branch tip:
+
+    git worktree add --force .worktrees/r5d r5d-subjet-mass
 
 Writes <out_dir>/<variant>.pt containing both the inputs the branch consumed
 and the outputs it produced, so the unified implementation can be checked
