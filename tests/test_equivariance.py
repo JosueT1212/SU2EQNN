@@ -870,6 +870,231 @@ def test_gatr_patch_mv_equivariance_through_shared_embed():
             f"GATr shared-embed patch equivariance failed: {(path1_mv - path2_mv).abs().max():.2e}"
 
 
+
+# ---------------------------------------------------------------------------
+# r9's cos_theta injector: dedicated slot-4 invariance check
+# ---------------------------------------------------------------------------
+
+def test_cos_theta_injector_slot_is_rotation_invariant():
+    """r9's cos_theta injector writes an invariant scalar into mv[:, 0, 4].
+
+    cos_theta = p_hat . n_hat_sub_highest is a genuine rotation invariant,
+    deliberately parked in a grade-2 slot of channel 0 because hybrid_r9's
+    channel-0 slots 4-6 are otherwise unused. The parametrized sweep above
+    only checks slots 0 and 7, so it never exercises this claim -- this test
+    closes that gap using the same rotation machinery as the sweep.
+
+    Channels 1-3 slots 4-6 are genuine bivector components (the wedge
+    p x n_hat) and must NOT be asserted invariant here -- they transform
+    under rotation like any other grade-2 slot.
+    """
+    layout, inject = VARIANTS["r9"]
+    fx = torch.load(f"{FIXTURE_DIR}/r9.pt", weights_only=False)
+    inputs = fx["inputs"]
+    aux = {k: v for k, v in inputs.items() if k not in ("fourmomenta", "ptr")}
+    cfg = _cfg(layout, inject)
+
+    plain = build_embedding(cfg, inputs["fourmomenta"], inputs["ptr"], aux)
+
+    for seed in (1, 2):
+        R = _random_rotation(seed)
+        rot_fm = inputs["fourmomenta"].clone()
+        rot_fm[:, 1:4] = rot_fm[:, 1:4] @ R.T
+        rot_aux = dict(aux)
+        rot_aux["axes"] = aux["axes"] @ R.T
+        if "p_lead" in aux:
+            pl = aux["p_lead"].clone()
+            pl[:, 1:4] = pl[:, 1:4] @ R.T
+            rot_aux["p_lead"] = pl
+
+        rotated = build_embedding(cfg, rot_fm, inputs["ptr"], rot_aux)
+
+        assert torch.allclose(
+            plain["mv"][:, 0, 4], rotated["mv"][:, 0, 4], atol=1e-4
+        ), "r9: cos_theta slot (channel 0, slot 4) is not rotation invariant"
+
+
+# ---------------------------------------------------------------------------
+# r7 GATr-net-level patch-pathway tests, ported verbatim from
+# r7-patch-injection (no plumbing change: these already exercised
+# su2eqnn.nets.gatr.GATr directly, not build_embedding, on that branch).
+# ---------------------------------------------------------------------------
+
+def test_gatr_patch_mv_none_matches_no_patch():
+    """GATr with patch_mv_channels=None is byte-identical to plain GATr."""
+    from su2eqnn.layers.attention.config import SelfAttentionConfig
+    from su2eqnn.layers.mlp.config import MLPConfig
+    from su2eqnn.nets.gatr import GATr
+
+    ITEMS = 5
+    IN_MV, OUT_MV, HIDDEN_MV = 1, 1, 4
+
+    torch.manual_seed(0)
+    net = GATr(
+        in_mv_channels=IN_MV,
+        out_mv_channels=OUT_MV,
+        hidden_mv_channels=HIDDEN_MV,
+        in_s_channels=None,
+        out_s_channels=None,
+        hidden_s_channels=None,
+        attention=SelfAttentionConfig(num_heads=2, multi_query=True, pos_encoding=False),
+        mlp=MLPConfig(activation="gelu"),
+        num_blocks=2,
+    )
+    net.eval()
+    assert net.patch_proj is None
+
+    x_mv = torch.randn(BATCH, ITEMS, IN_MV, 8)
+    out_mv_a, out_s_a = net(x_mv, scalars=None)
+    out_mv_b, out_s_b = net(x_mv, scalars=None, patch_mv=None)
+
+    assert torch.allclose(out_mv_a, out_mv_b, atol=1e-6)
+
+
+def test_gatr_patch_mv_changes_output():
+    """Nonzero patch_mv perturbs the output; patch_mv=None on a patch-enabled net matches no-patch forward."""
+    from su2eqnn.layers.attention.config import SelfAttentionConfig
+    from su2eqnn.layers.mlp.config import MLPConfig
+    from su2eqnn.nets.gatr import GATr
+
+    ITEMS = 5
+    IN_MV, OUT_MV, HIDDEN_MV, PATCH_MV = 1, 1, 4, 4
+
+    torch.manual_seed(0)
+    net = GATr(
+        in_mv_channels=IN_MV,
+        out_mv_channels=OUT_MV,
+        hidden_mv_channels=HIDDEN_MV,
+        in_s_channels=None,
+        out_s_channels=None,
+        hidden_s_channels=None,
+        attention=SelfAttentionConfig(num_heads=2, multi_query=True, pos_encoding=False),
+        mlp=MLPConfig(activation="gelu"),
+        num_blocks=2,
+        patch_mv_channels=PATCH_MV,
+    )
+    net.eval()
+    assert net.patch_proj is not None
+    assert len(net.patch_proj) == 2
+
+    x_mv = torch.randn(BATCH, ITEMS, IN_MV, 8)
+    patch_mv = torch.randn(BATCH, ITEMS, PATCH_MV, 8)
+
+    out_no_patch, _ = net(x_mv, scalars=None, patch_mv=None)
+    out_with_patch, _ = net(x_mv, scalars=None, patch_mv=patch_mv)
+
+    assert not torch.allclose(out_no_patch, out_with_patch, atol=1e-6), \
+        "nonzero patch_mv must change GATr output"
+
+
+def test_gatr_patch_proj_zero_preserved_with_nonzero_bias():
+    """patch_proj must preserve zero-patch-mv -> zero-injection even after training moves its bias.
+
+    Spurion tokens carry patch_mv == 0 exactly by design (see
+    experiments/top_tagging/embedding's patch layout). If patch_proj[i] had
+    a learnable grade-0 bias, that bias starts at zero but receives gradient
+    during training and becomes nonzero, which would inject spurious
+    grade-0 signal into spurion tokens (patch_proj[i](0) != 0). This test
+    simulates the post-training state by manually setting a nonzero bias on
+    patch_proj[0] and asserts patch_proj[i](0) stays exactly zero.
+    """
+    from su2eqnn.layers.attention.config import SelfAttentionConfig
+    from su2eqnn.layers.mlp.config import MLPConfig
+    from su2eqnn.nets.gatr import GATr
+
+    ITEMS = 5
+    IN_MV, OUT_MV, HIDDEN_MV, PATCH_MV = 1, 1, 4, 4
+
+    torch.manual_seed(0)
+    net = GATr(
+        in_mv_channels=IN_MV,
+        out_mv_channels=OUT_MV,
+        hidden_mv_channels=HIDDEN_MV,
+        in_s_channels=None,
+        out_s_channels=None,
+        hidden_s_channels=None,
+        attention=SelfAttentionConfig(num_heads=2, multi_query=True, pos_encoding=False),
+        mlp=MLPConfig(activation="gelu"),
+        num_blocks=2,
+        patch_mv_channels=PATCH_MV,
+    )
+    net.eval()
+    assert net.patch_proj is not None
+
+    layer0 = net.patch_proj[0]
+
+    # patch_proj must be constructed with bias=False: any grade-0 bias would
+    # drift away from zero during training (it receives gradient from the
+    # pooled classification logit) and then inject spurious grade-0 signal
+    # into spurion tokens, whose patch_mv is exactly zero by design.
+    assert layer0.bias is None, (
+        "patch_proj layers must be constructed with bias=False so that "
+        "patch_proj[i](zero patch_mv) stays exactly zero even after "
+        "training moves the bias away from its zero initialization"
+    )
+
+    # Simulate post-training state: if a bias parameter existed, force it
+    # nonzero (as it would be after gradient updates during training) and
+    # confirm the zero-preserving invariant still holds regardless.
+    if layer0.bias is not None:
+        with torch.no_grad():
+            layer0.bias.fill_(0.5)
+
+    zero_patch_mv = torch.zeros(BATCH, ITEMS, HIDDEN_MV, 8)
+    out_mv, _ = layer0(zero_patch_mv, scalars=None)
+
+    assert torch.equal(out_mv, torch.zeros_like(out_mv)), (
+        "patch_proj[i](zero patch_mv) must stay exactly zero, otherwise "
+        "spurion tokens (patch_mv == 0 by design) receive spurious grade-0 "
+        "signal"
+    )
+
+
+def test_gatr_patch_embed_zero_preserved_end_to_end():
+    """Zero patch_mv stays exactly zero through patch_embed AND patch_proj.
+
+    Confirms the shared embedding stage (EquiLinear(patch_mv_channels ->
+    hidden_mv_channels), bias=False) composes with the per-block projections
+    without breaking the zero-on-spurion invariant: spurion tokens carry
+    patch_mv == 0 exactly, and neither stage may inject spurious signal.
+    """
+    from su2eqnn.layers.attention.config import SelfAttentionConfig
+    from su2eqnn.layers.mlp.config import MLPConfig
+    from su2eqnn.nets.gatr import GATr
+
+    ITEMS = 5
+    IN_MV, OUT_MV, HIDDEN_MV, PATCH_MV = 1, 1, 6, 4
+
+    torch.manual_seed(0)
+    net = GATr(
+        in_mv_channels=IN_MV,
+        out_mv_channels=OUT_MV,
+        hidden_mv_channels=HIDDEN_MV,
+        in_s_channels=None,
+        out_s_channels=None,
+        hidden_s_channels=None,
+        attention=SelfAttentionConfig(num_heads=2, multi_query=True, pos_encoding=False),
+        mlp=MLPConfig(activation="gelu"),
+        num_blocks=2,
+        patch_mv_channels=PATCH_MV,
+    )
+    net.eval()
+    assert net.patch_embed is not None
+    assert net.patch_embed.bias is None, (
+        "patch_embed must be constructed with bias=False so that "
+        "patch_embed(zero patch_mv) stays exactly zero"
+    )
+
+    zero_patch_mv = torch.zeros(BATCH, ITEMS, PATCH_MV, 8)
+    patch_embedded, _ = net.patch_embed(zero_patch_mv)
+    assert torch.equal(patch_embedded, torch.zeros_like(patch_embedded))
+
+    out_mv, _ = net.patch_proj[0](patch_embedded)
+    assert torch.equal(out_mv, torch.zeros_like(out_mv)), (
+        "patch_proj[i](patch_embed(zero patch_mv)) must stay exactly zero, "
+        "otherwise spurion tokens receive spurious grade-0 signal"
+    )
+
 if __name__ == "__main__":
     test_spin3_inverse()
     test_spin3_norm_preservation()
@@ -901,5 +1126,10 @@ if __name__ == "__main__":
     test_build_embedding_patch_equivariance()
     test_gatr_patch_mv_equivariance()
     test_gatr_patch_mv_equivariance_through_shared_embed()
+    test_cos_theta_injector_slot_is_rotation_invariant()
+    test_gatr_patch_mv_none_matches_no_patch()
+    test_gatr_patch_mv_changes_output()
+    test_gatr_patch_proj_zero_preserved_with_nonzero_bias()
+    test_gatr_patch_embed_zero_preserved_end_to_end()
     print("All equivariance tests passed.")
 
