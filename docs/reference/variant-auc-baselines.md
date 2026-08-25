@@ -142,7 +142,7 @@ the embedding port.
 
 | variant | unified Test AUC | branch Test AUC | seeded both sides? | notes |
 |---|---|---|---|---|
-| r4 | 0.9637 | 0.9602 (not retained — see note) | unified only | 1 epoch, mini |
+| r4 | 0.9637 | 0.9629 | unified only | 1 epoch, mini; re-derived, log at `outputs/pair_branch_r4.log` |
 | r5a | 0.9594 | 0.9622 | unified only | 1 epoch, mini |
 | r5b | 0.9658 | 0.9646 | unified only | 1 epoch, mini |
 | r5c | 0.7519 | 0.7603 | unified only | 1 epoch, **subset** (2000/500/500 jets) — **not comparable to the committed 0.9770 baseline; see the callout above and the addendum below** |
@@ -199,8 +199,10 @@ for the full accounting.
   `data.path` overridden at the command line to that file (not committed to
   the config) and report the final test AUC against 0.9770. Result to be
   filled in once it finishes.
-- **r4's branch-side paired number (0.9602):** the throwaway worktree that
-  produced it was removed before its log was copied out, so as of this
-  addendum it is marked "not retained" in the table above rather than
-  presented as a verifiable figure. To be either re-derived (fresh run,
-  log kept under `outputs/`) or left struck, updated once resolved.
+- **r4's branch-side paired number: RESOLVED.** The original 0.9602 was
+  struck (its worktree was removed before the log was copied out). A fresh
+  re-run of the same pairing (`r4-multiaxis-bivector`,
+  `config/top_tagging_grade2_bivectors.yaml`, 1 epoch, `+training.seed=0`,
+  in a throwaway worktree removed only after the log was copied out) gave
+  **Test AUC=0.9629, accuracy=0.8935**, retained at `outputs/pair_branch_r4.log`.
+  The table above now shows 0.9629 as r4's branch-side number.
