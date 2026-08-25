@@ -20,8 +20,10 @@ from su2eqnn.nets.gatr import GATr
 from su2eqnn.layers.attention.config import SelfAttentionConfig
 from su2eqnn.layers.mlp.config import MLPConfig
 from experiments.top_tagging.dataset import TopTaggingDataset
-from experiments.top_tagging.embedding import build_embedding, apply_axis_channel_dropout
-from experiments.top_tagging.wrapper import TopTaggingWrapper
+from experiments.top_tagging.embedding import (
+    build_embedding, apply_axis_channel_dropout, apply_patch_channel_dropout,
+)
+from experiments.top_tagging.wrapper import TopTaggingWrapper, TopTaggingWrapperBivectorPatch
 
 log = logging.getLogger(__name__)
 
@@ -62,6 +64,7 @@ def build_model(cfg) -> TopTaggingWrapper:
         num_heads          : int
         in_mv_channels     : int (optional, default 1)
     """
+    patch_mv_channels = getattr(cfg.model, "patch_mv_channels", None)
     net = GATr(
         in_mv_channels=getattr(cfg.model, "in_mv_channels", 1),
         out_mv_channels=1,
@@ -72,7 +75,10 @@ def build_model(cfg) -> TopTaggingWrapper:
         attention=SelfAttentionConfig(num_heads=cfg.model.num_heads),
         mlp=MLPConfig(activation="gelu"),
         num_blocks=cfg.model.num_blocks,
+        patch_mv_channels=patch_mv_channels,
     )
+    if patch_mv_channels is not None:
+        return TopTaggingWrapperBivectorPatch(net)
     return TopTaggingWrapper(net)
 
 
@@ -167,7 +173,8 @@ def run_experiment(cfg: DictConfig) -> None:
             batch = batch.to(device)
             embedding = build_embedding(cfg, batch.x, batch.ptr, collect_aux(batch))
             if axis_dropout_p > 0.0:
-                embedding = apply_axis_channel_dropout(embedding, axis_dropout_p)
+                apply_axis_channel_dropout(embedding, axis_dropout_p)
+                apply_patch_channel_dropout(embedding, axis_dropout_p)
             logits = model(embedding)              # (B, 1)
             targets = batch.label.float().unsqueeze(1)  # (B, 1)
             loss = criterion(logits, targets)

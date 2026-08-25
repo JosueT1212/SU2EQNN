@@ -74,6 +74,40 @@ def attach_spurions(mv: Tensor, ptr: Tensor, two_beams: bool) -> dict:
     return {"mv": mv_out, "batch": get_batch_from_ptr(ptr_out), "is_beam": is_beam}
 
 
+def scatter_particles(values: Tensor, is_beam: Tensor) -> Tensor:
+    """Place per-particle rows into a spurion-interleaved tensor, zeros on beams.
+
+    Parameters
+    ----------
+    values  : (n_particles, C, 8)
+    is_beam : (n_total,) bool from attach_spurions
+    """
+    out = torch.zeros(
+        is_beam.shape[0], values.shape[1], values.shape[2],
+        dtype=values.dtype, device=values.device,
+    )
+    out[~is_beam] = values
+    return out
+
+
+def apply_patch_channel_dropout(embedding: dict, p: float) -> dict:
+    """Zero each patch channel independently per jet with prob p.
+
+    Same ModDrop convention as apply_axis_channel_dropout, applied to the
+    separate patch_mv stream instead of to input channels.
+    """
+    patch = embedding.get("patch_mv")
+    if patch is None or p <= 0.0:
+        return embedding
+    batch = embedding["batch"]
+    n_jets = int(batch.max().item()) + 1
+    keep = (
+        torch.rand(n_jets, patch.shape[1], device=patch.device) >= p
+    ).to(patch.dtype)
+    embedding["patch_mv"] = patch * keep[batch][:, :, None]
+    return embedding
+
+
 def apply_axis_channel_dropout(embedding: dict, p: float) -> dict:
     """Zero each axis channel (1..C-1) independently per jet with prob p.
 

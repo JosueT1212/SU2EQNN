@@ -78,6 +78,37 @@ def single_channel(fourmomenta, ptr, aux, two_beams=True, rescale=True):
     return mv, {}
 
 
+def patch(fourmomenta, ptr, aux, two_beams=True, rescale=True):
+    """r7 layout: plain kinematic mv plus a separate patch_mv wedge stream.
+
+    Unlike multi_channel, the wedges are not baked into input channels; they
+    are returned separately for per-block residual re-injection into GATr's
+    hidden stream.
+    """
+    axes = aux.get("axes")
+    if axes is None:
+        raise ValueError("patch layout requires aux['axes']")
+
+    if rescale:
+        fourmomenta = fourmomenta / UNITS
+
+    n = fourmomenta.shape[0]
+    mv = torch.zeros(n, 1, 8, dtype=fourmomenta.dtype, device=fourmomenta.device)
+    mv[:, 0, 0] = fourmomenta[:, 0]
+    mv[:, 0, 1:4] = fourmomenta[:, 1:4]
+
+    particle_batch = get_batch_from_ptr(ptr)
+    ax = axes.to(fourmomenta.dtype)[particle_batch]      # (n_particles, K, 3)
+    p = fourmomenta[:, 1:4].unsqueeze(1)                 # (n_particles, 1, 3)
+
+    patch_mv = torch.zeros(
+        n, axes.shape[1], 8, dtype=fourmomenta.dtype, device=fourmomenta.device,
+    )
+    wedge_into(patch_mv, slice(None), p, ax)
+
+    return mv, {"_patch_particles": patch_mv}
+
+
 def hybrid_r9(fourmomenta, ptr, aux, two_beams=True, rescale=True):
     """r9 layout: 4 channels, subjet-highest axis reserved for the scalar.
 

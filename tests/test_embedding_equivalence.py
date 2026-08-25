@@ -22,6 +22,7 @@ VARIANTS = {
     "r5c": ("multi_channel", ["ca_phase"]),
     "r8": ("single_channel", ["lead_pseudoscalar"]),
     "r9": ("hybrid_r9", ["cos_theta"]),
+    "r7": ("patch", []),
 }
 
 

@@ -1,13 +1,15 @@
 """Public embedding API: one entry point, variant chosen by config."""
 
 from experiments.top_tagging.embedding.core import (  # noqa: F401
-    UNITS, apply_axis_channel_dropout, get_batch_from_ptr,
+    UNITS, apply_axis_channel_dropout, apply_patch_channel_dropout,
+    get_batch_from_ptr,
 )
-from experiments.top_tagging.embedding.core import attach_spurions
+from experiments.top_tagging.embedding.core import attach_spurions, scatter_particles
 from experiments.top_tagging.embedding.registry import check_aux, resolve
 
 __all__ = [
-    "build_embedding", "apply_axis_channel_dropout", "get_batch_from_ptr", "UNITS",
+    "build_embedding", "apply_axis_channel_dropout", "apply_patch_channel_dropout",
+    "get_batch_from_ptr", "UNITS",
 ]
 
 
@@ -43,5 +45,9 @@ def build_embedding(cfg, fourmomenta, ptr, aux) -> dict:
             inj.fn(mv, fourmomenta, ptr, particle_batch, aux, rescale)
 
     out = attach_spurions(mv, ptr, two_beams)
-    out.update(extras)
+    for key, value in extras.items():
+        if key == "_patch_particles":
+            out["patch_mv"] = scatter_particles(value, out["is_beam"])
+        else:
+            out[key] = value
     return out

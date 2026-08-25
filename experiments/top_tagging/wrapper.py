@@ -75,3 +75,45 @@ class TopTaggingWrapper(nn.Module):
         batchsize = int(batch.max().item()) + 1
         logits = scatter(scalars_out, batch, dim=0, dim_size=batchsize, reduce="mean")
         return logits  # (batchsize, 1)
+
+
+class TopTaggingWrapperBivectorPatch(nn.Module):
+    """GATr + mean-pool head for bivector patch-injected binary jet classification.
+
+    Parameters
+    ----------
+    net : GATr configured with in_mv_channels=1, out_mv_channels=1,
+          in_s_channels=None, out_s_channels=None, patch_mv_channels=K
+    """
+
+    def __init__(self, net: nn.Module):
+        super().__init__()
+        self.net = net
+
+    def forward(self, embedding: dict) -> Tensor:
+        """Classify jets.
+
+        Parameters
+        ----------
+        embedding : dict from embed_tagging_data_bivector_patch
+            "mv"       : Tensor (n_total, 1, 8)
+            "patch_mv" : Tensor (n_total, K, 8)
+            "batch"    : Tensor (n_total,) jet index per token
+            "is_beam"  : Tensor (n_total,) bool (not used for masking here)
+
+        Returns
+        -------
+        logits : Tensor (batchsize, 1)
+        """
+        mv = embedding["mv"].unsqueeze(0)              # (1, n_total, 1, 8)
+        patch_mv = embedding["patch_mv"].unsqueeze(0)   # (1, n_total, K, 8)
+        batch = embedding["batch"]                      # (n_total,)
+
+        mask = build_attention_mask(batch, mv.dtype)
+
+        mv_out, _ = self.net(mv, scalars=None, attention_mask=mask, patch_mv=patch_mv)
+        scalars_out = mv_out[0, :, :, 0]  # (n_total, 1)
+
+        batchsize = int(batch.max().item()) + 1
+        logits = scatter(scalars_out, batch, dim=0, dim_size=batchsize, reduce="mean")
+        return logits  # (batchsize, 1)

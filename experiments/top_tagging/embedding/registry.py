@@ -37,6 +37,7 @@ LAYOUTS = {
     "multi_channel": layouts.multi_channel,
     "single_channel": layouts.single_channel,
     "hybrid_r9": layouts.hybrid_r9,
+    "patch": layouts.patch,
 }
 
 INJECTORS = {
