@@ -102,6 +102,22 @@ the archived branch tip's config, not a repeat of the untracked number. The
 report states the difference plainly; a nonzero gap is expected (the 0.9786
 run was unseeded, this one seeded at 0) and is not being scored pass/fail.
 
+**IMPORTANT — r5c has a committed baseline and was not checked against it
+below.** This doc's own opening line says "Only `r5c` has tracked, recorded
+results" — `r5c-pseudoscalar-phase`'s `outputs/pseudoscalar_phase_mini/experiment.log`
+is tracked in that branch's git history and ends `Test AUC=0.9770 |
+accuracy=0.9260` (30 epochs, `data.path=data/toptagging_mini_axes_phases.npz`,
+per the branch's committed `.hydra/overrides.yaml`). This is a *stronger*
+baseline than r4's (which is untracked-only), and it was missed when Task
+12's AUC step was rescoped to "only r4 has a recorded number." The r5c row
+in the paired-run table below is a 1-epoch, 2000-jet **subset** run
+(0.7519 vs. 0.7603) — it does not test the same thing as 0.9770 and cannot
+be read against it. **Reproduction against 0.9770 is pending a full
+30-epoch run over the real axes+phases mini dataset**; see the addendum at
+the end of this section for the result once available. Until that addendum
+is filled in, r5c should be treated the same as r4: a variant with a real
+recorded baseline that the branch is not yet safe to delete against.
+
 ### Paired short runs: unified vs. source branch, all eight variants
 
 Each pair: 1 epoch on the mini (or, for r5c/r5d, a subset) dataset, same
@@ -126,10 +142,10 @@ the embedding port.
 
 | variant | unified Test AUC | branch Test AUC | seeded both sides? | notes |
 |---|---|---|---|---|
-| r4 | 0.9637 | 0.9602 | unified only | 1 epoch, mini |
+| r4 | 0.9637 | 0.9602 (not retained — see note) | unified only | 1 epoch, mini |
 | r5a | 0.9594 | 0.9622 | unified only | 1 epoch, mini |
 | r5b | 0.9658 | 0.9646 | unified only | 1 epoch, mini |
-| r5c | 0.7519 | 0.7603 | unified only | 1 epoch, **subset** (2000/500/500 jets, not the full mini set — see below) |
+| r5c | 0.7519 | 0.7603 | unified only | 1 epoch, **subset** (2000/500/500 jets) — **not comparable to the committed 0.9770 baseline; see the callout above and the addendum below** |
 | r5d | 0.9254 | 0.9254 | unified only | 1 epoch, **subset**; exact match despite the branch being unseeded |
 | r7 | 0.9571 | 0.9545 | unified only | 1 epoch, mini |
 | r8 | 0.9236 | 0.9381 | unified only | 1 epoch, mini path/optimizer overridden (see report — the checked-in config needs the full dataset and `lion_pytorch`, neither available; also the unified half inherited `validate_every_n_steps=5000` from that config, so it never checkpointed a "best" model and was evaluated on its final-epoch weights instead, unlike the branch half) |
@@ -168,3 +184,23 @@ r8's larger gap (0.9236 vs 0.9381) is very likely explained by the
 half never saved a "best" checkpoint and was scored on raw final-epoch
 weights) rather than by unseeded randomness alone; see the Task 12 report
 for the full accounting.
+
+## Addendum (in progress at disclosure-commit time)
+
+- **r4 full-mini reproduction (vs. 0.9786):** running (`config/top_tagging_grade2_bivectors.yaml`,
+  30 epochs, `training.seed: 0`, unified code). Log:
+  `outputs/unified_top_tagging_grade2_bivectors_full.log`. Result to be
+  filled in once it finishes.
+- **r5c full-mini reproduction (vs. 0.9770):** blocked on regenerating
+  `data/toptagging_mini_axes_phases.npz` (removed from disk; the full
+  24000-jet `phases` precompute is a pure-Python, roughly-cubic-per-jet
+  computation and takes a long time). Once it exists, the plan is to run
+  `config/top_tagging_pseudoscalar_phase.yaml` for the full 30 epochs with
+  `data.path` overridden at the command line to that file (not committed to
+  the config) and report the final test AUC against 0.9770. Result to be
+  filled in once it finishes.
+- **r4's branch-side paired number (0.9602):** the throwaway worktree that
+  produced it was removed before its log was copied out, so as of this
+  addendum it is marked "not retained" in the table above rather than
+  presented as a verifiable figure. To be either re-derived (fresh run,
+  log kept under `outputs/`) or left struck, updated once resolved.

@@ -56,6 +56,17 @@ the merged `data/toptagging_mini_aux.npz` produced by the command above.
 
 ## Notes
 
+- **`r5c-pseudoscalar-phase` has a committed AUC baseline that has not yet
+  been reproduced.** `outputs/pseudoscalar_phase_mini/experiment.log` on
+  that branch is tracked in git history and ends `Test AUC=0.9770 |
+  accuracy=0.9260` (30 epochs, `data.path=data/toptagging_mini_axes_phases.npz`).
+  This is a real, verifiable baseline — stronger than r4's untracked 0.9786 —
+  and Task 12's paired-run table only exercises r5c with a 1-epoch,
+  2000-jet subset (0.7519 vs 0.7603), which is not comparable to 0.9770.
+  Treat r5c the same as r4: not yet safe to archive/delete against a
+  reproduced number. See `docs/reference/variant-auc-baselines.md`'s
+  addendum for the full 30-epoch reproduction result once it exists.
+
 - **`scripts/capture_embedding_fixtures.py` is a historical artifact.** It
   calls each branch's pre-refactor entry-point names (e.g. branch-specific
   `embed_tagging_data_*` functions) to capture the `tests/fixtures/*.pt`
