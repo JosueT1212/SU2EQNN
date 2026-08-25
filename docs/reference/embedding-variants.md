@@ -92,15 +92,23 @@ the merged `data/toptagging_mini_aux.npz` produced by the command above.
   report for the paired short-run numbers actually measured.
 - Every unified config now sets `training.seed` (added in Task 12) so mini
   runs are reproducible; it was previously absent from every branch-era
-  config, including the run that produced r4's untracked 0.9786. Seeding
-  only takes effect on the unified side, though: of the eight source
-  branches, only `r9-subjet-channel-vs-scalar`'s `experiment.py` has a
-  `set_seed` function at all (unified's came from that file, ported
-  verbatim in Task 2) — the other seven branches cannot be made
-  reproducible without patching branch source, which is out of scope (no
-  source-branch edits). See `docs/reference/variant-auc-baselines.md`'s
-  "Task 12 verification" section for what this means for each paired
-  comparison.
+  config, including the run that produced r4's untracked 0.9786. Only
+  `r9-subjet-channel-vs-scalar`'s `experiment.py` has an internal
+  `set_seed` function among the eight source branches (unified's came from
+  that file, ported verbatim in Task 2) — the other seven cannot be made
+  reproducible by config alone. **This was closed by an external-seeding
+  parity sweep, not left as a limitation**: seeding `random`/`numpy`/`torch`
+  from outside each branch's `main()` (verified equivalent to internal
+  seeding — nothing on either side consumes RNG state earlier) and re-running
+  every variant produced bit-for-bit identical unified-vs-branch training
+  runs for seven of eight variants (every param count, every validation
+  step's AUC/accuracy, epoch loss, and test AUC/accuracy — not just the
+  final number), with r9 already verified via true internal seeding on
+  both sides. Full methodology and every log line compared:
+  `.superpowers/sdd/2026-08-25-unified-embedding-registry/parity-report.md`
+  and `docs/reference/variant-auc-baselines.md`'s "Training-path parity
+  sweep" section. This is direct verification of the training path itself,
+  not an inference from matching embeddings plus a shared `experiment.py`.
 - **`config/top_tagging_single_channel_axis.yaml` (r8, variant a) cannot be
   run as checked in, in this environment.** It needs `data/toptagging_full_axes.npz`
   (the 1.2M-jet full dataset with axes precomputed — not distributed, and
@@ -109,6 +117,25 @@ the merged `data/toptagging_mini_aux.npz` produced by the command above.
   substituted the mini dataset and the Adam optimizer (matching the
   branch's own mini-scale `top_tagging_single_channel_axis_a.yaml`
   variant) via runtime overrides — the committed config was not changed.
+- **`r8-single-channel-ablation`'s branch code infers the pseudoscalar
+  channel from data presence, not from config — a real behavior difference
+  from the unified registry, discovered during the parity sweep above.**
+  The branch's `dataset.py` loads `p_lead_{mode}` into the batch whenever
+  that key exists in the `.npz` file, and its embedding dispatch turns the
+  pseudoscalar channel on whenever `p_lead` is present on the batch —
+  there is no config-level gate on the branch side. The unified registry's
+  `data.inject: [...]` list is the *only* thing that controls
+  `lead_pseudoscalar`. Practically: r8's original branch dataset
+  (`data/toptagging_mini_axes.npz`) has no `p_lead` key, so this never
+  fired in the branch's own historical runs — but any dataset file that
+  does carry `p_lead` (e.g. the merged aux file, or the parity sweep's
+  shared subset file) will silently turn pseudoscalar injection on for the
+  branch's "variant a" config regardless of what that config requests.
+  This caused an initial parity-sweep mismatch that was fully explained
+  once found (see the baselines doc); it is not a unified-side bug, and
+  the unified `single_channel` + explicit `inject: [lead_pseudoscalar]`
+  path reproduces the branch's pseudoscalar-on behavior exactly once both
+  sides are told to use it.
 - **r5c and r5d's aux features (`phases`, `masses`) are the slow part of
   `precompute_features.py`.** `ca_hard_branch_phases` is a pure-Python,
   roughly-cubic-per-jet pairwise scan; over the full 24000-jet mini set

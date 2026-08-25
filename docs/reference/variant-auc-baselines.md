@@ -96,11 +96,12 @@ Unified code, `config/top_tagging_grade2_bivectors.yaml` (30 epochs,
 `training.seed: 0` — newly added; the original branch run that produced
 0.9786 had no seed set at all), run to completion:
 
-**Test AUC = &lt;filled after the run completes — see Task 12 report&gt;**, vs. the
-untracked 0.9786 noted above. This is a fresh, seeded, verifiable run against
-the archived branch tip's config, not a repeat of the untracked number. The
-report states the difference plainly; a nonzero gap is expected (the 0.9786
-run was unseeded, this one seeded at 0) and is not being scored pass/fail.
+**Test AUC = 0.9781, accuracy = 0.9250** (log: `outputs/unified_top_tagging_grade2_bivectors_full.log`),
+vs. the untracked 0.9786 / 0.9245 noted above — a difference of -0.0005 AUC.
+This is a fresh, seeded, verifiable run against the archived branch tip's
+config, not a repeat of the untracked number. The 0.0005 gap is not being
+scored pass/fail (the 0.9786 run was unseeded, this one seeded at 0) — it
+is reported as a number.
 
 **IMPORTANT — r5c has a committed baseline and was not checked against it
 below.** This doc's own opening line says "Only `r5c` has tracked, recorded
@@ -124,21 +125,20 @@ Each pair: 1 epoch on the mini (or, for r5c/r5d, a subset) dataset, same
 config, `checkpoint_path` overridden to a scratch path so no real checkpoint
 was touched. Full numbers and commands are in the Task 12 report.
 
-**Seeding caveat — read before comparing any row except r9.** Unified
-`experiments/top_tagging/experiment.py` calls `set_seed()` unconditionally
-(it was ported wholesale from `r9-subjet-channel-vs-scalar`'s own
-`experiment.py` in Task 2). Checking each other branch's tip
+**Seeding note (superseded — see the parity sweep below).** The table
+immediately below was produced with `experiments/top_tagging/experiment.py`'s
+internal `set_seed()` on the unified side only: checking each branch tip
 (`git show <branch>:experiments/top_tagging/experiment.py | grep -c "def
 set_seed"`) returns **0** for r4, r5a, r5b, r5c, r5d, r7, and r8 — only r9's
-branch has a `set_seed` function at all. A `+training.seed=0` override was
-still passed to every branch-side run for the record, but on these seven it
-has nothing to attach to: the branch process ran with **whatever RNG state
-its unseeded imports produced**, while the unified process was seeded at 0.
-Only the r9 row is a true apples-to-apples seeded comparison; the other six
-(plus r5c/r5d, see below) are "same config, uncontrolled branch-side
-randomness" — informative about gross training-path parity, not a strict
-trajectory match, and a small AUC gap on those rows is not attributable to
-the embedding port.
+branch calls `set_seed` internally, so only the r9 row below was a true
+seeded apples-to-apples comparison at the time it was run. **This gap has
+since been closed**: a follow-up parity sweep re-ran all eight variants with
+an *externally*-seeded launcher on both sides (seeding immediately before
+each branch's unseeded `main()`, verified equivalent to the unified side's
+internal seeding — no RNG-consuming code runs before that point on either
+side). See "Training-path parity sweep" below for the direct, verified
+result; the small gaps in the table immediately below are an artifact of
+one-sided seeding, not evidence about the training path.
 
 | variant | unified Test AUC | branch Test AUC | seeded both sides? | notes |
 |---|---|---|---|---|
@@ -168,29 +168,102 @@ already proven bit-identical against the committed fixtures, so a smaller
 dataset answers that question just as well. Do not read the r5c/r5d rows
 above as full-mini-dataset numbers.
 
-**Parity for the six unseeded-branch variants (r4, r5a, r5b, r5c, r5d, r7)
-rests on three things, not on the branch-side AUC number matching:**
-1. The embedding is bit-identical to the branch's, proven by the committed
-   `tests/fixtures/*.pt` equivalence tests (`tests/test_embedding_equivalence.py`).
-2. Unified `experiment.py` is r9's file, ported verbatim and reviewed
-   against the branch diff in Task 2 — the training loop itself is not a
-   per-variant reimplementation.
-3. Every unified short-run AUC above lands in the same sane band as its
-   (unseeded) branch counterpart — no variant collapsed, diverged, or
-   errored.
+r8's larger gap in the table above (0.9236 vs 0.9381) turned out to have
+two compounding causes, both resolved by the parity sweep below: one-sided
+seeding, and a `validate_every_n_steps` asymmetry (the unified half
+inherited 5000 from the checked-in full-dataset config and so never
+checkpointed a "best" model within 1 epoch, scoring its raw final-epoch
+weights instead of a checkpoint like the branch half did).
 
-r8's larger gap (0.9236 vs 0.9381) is very likely explained by the
-`validate_every_n_steps` asymmetry noted in the table above (the unified
-half never saved a "best" checkpoint and was scored on raw final-epoch
-weights) rather than by unseeded randomness alone; see the Task 12 report
-for the full accounting.
+## Training-path parity sweep: every variant, both sides seeded, verified
+
+A follow-up sweep re-ran every one of the eight variants (throwaway
+worktrees, `git worktree remove --force` after each) with an **externally
+seeded launcher** on both sides — seeding `random`/`numpy`/`torch` from
+outside `main()` before invoking each branch's Hydra entry point, which is
+equivalent to the unified side's internal `set_seed(0)` because nothing on
+either side consumes RNG state before that point (verified: no
+`random`/`shuffle`/`seed` symbol appears in any branch's `dataset.py`, and
+every branch's `main()` goes straight from `@hydra.main` into
+`run_experiment` with no seeding in between). Full methodology, commands,
+and the complete per-step log comparison are in
+`.superpowers/sdd/2026-08-25-unified-embedding-registry/parity-report.md`.
+
+**Result: seven of eight variants (r4, r5a, r5b, r5c, r5d, r7, and r8
+variant-b) are bit-for-bit IDENTICAL between unified and branch** — not
+just the final test AUC, but every logged quantity: parameter count, every
+validation step's AUC and accuracy, epoch loss, test AUC, test accuracy.
+r9 was already verified identical in the earlier (properly seeded) pairing
+above and was not re-run. This directly verifies the training path, not
+just the embedding (which the fixtures already proved bit-identical) — the
+weaker "same sane band" argument used earlier in this document is
+superseded by this direct result.
+
+| variant | unified config | Test AUC/acc (both sides, identical) |
+|---|---|---|
+| r4 | `top_tagging_grade2_bivectors` | 0.9037 / 0.8220 |
+| r5a | `top_tagging_pseudoscalar_triad` | 0.8516 / 0.7860 |
+| r5b | `top_tagging_pseudoscalar_handedness` | 0.9002 / 0.8540 |
+| r5c | `top_tagging_pseudoscalar_phase` | 0.7528 / 0.7120 |
+| r5d | `top_tagging_subjet_mass` | 0.9250 / 0.9000 |
+| r7 | `top_tagging_bivector_patch` | 0.9125 / 0.8280 |
+| r8 (variant b) | `top_tagging_single_channel_axis_b` | 0.7761 / 0.6460 |
+| r9 | `top_tagging_r9_scalar` | 0.9519 / 0.8895 (verified earlier, not re-run) |
+
+All eight runs used the 2000/500/500-jet subset (`data/toptagging_subset_aux.npz`,
+not committed) so every variant — including r5c/r5d — shares one common
+dataset with every aux key present; these numbers are not meant to be
+compared against any recorded full-dataset baseline (see the r5c/r4
+full-mini reproductions elsewhere in this document for that).
+
+### r8 "variant a": a real, documented behavior difference — not a training-path bug
+
+The first r8 parity attempt (unified `top_tagging_single_channel_axis`
+substitute vs. branch `top_tagging_single_channel_axis_a`, both against
+`data/toptagging_subset_aux.npz`) **did not match**: unified Step 15
+`val AUC=0.7709`, branch `val AUC=0.7811`, diverging from the first
+validation step, with the branch log additionally printing
+`Single-channel jet-axis embedding: pseudoscalar=on`.
+
+**Root cause:** r8's branch `dataset.py` loads `p_lead_{mode}` into the
+batch whenever that key is present in the `.npz` file, and its embedding
+dispatch turns the pseudoscalar channel on whenever `p_lead` is present on
+the batch — the branch has **no config-level gate**; it infers the
+variant from data presence. The unified registry's `data.inject: [...]`
+list is the only thing that turns `lead_pseudoscalar` on or off. Because
+the shared parity dataset (`toptagging_subset_aux.npz`) carries `p_lead`
+for every variant, the branch's "variant a" run silently auto-enabled
+pseudoscalar injection that its own config intends to leave off — its
+*original* config (`data.path=data/toptagging_mini_axes.npz`, no `p_lead`
+key) never triggers this, so the branch's own historical "variant a" runs
+were never affected. The unified side, correctly gating on `data.inject:
+[]`, left the channel off regardless of what the npz contained — this is
+the injector-gate design working as intended, not a defect.
+
+Re-running the pairing with each side's **variant-b** config (which
+explicitly wants the pseudoscalar channel on both sides) gave the
+IDENTICAL result in the table above, including the exact
+0.7811/0.7953/0.7965/0.7998 step sequence the mismatched "variant a"
+branch run had already shown — confirming the unified `single_channel` +
+`lead_pseudoscalar` path reproduces the branch path exactly once both
+sides are told to use the same embedding.
+
+**This is a real behavior difference a future reader must know, independent
+of Task 12's own verification:** any dataset file that happens to carry a
+`p_lead_*` key will silently turn on pseudoscalar injection on
+`r8-single-channel-ablation`'s branch code, regardless of which config was
+requested, whereas the unified registry only turns it on when
+`data.inject` explicitly lists `lead_pseudoscalar`. Anyone reusing a
+shared, multi-key aux file (as this sweep did) against branch code that
+infers behavior from data presence should expect this class of surprise.
 
 ## Addendum (in progress at disclosure-commit time)
 
-- **r4 full-mini reproduction (vs. 0.9786):** running (`config/top_tagging_grade2_bivectors.yaml`,
-  30 epochs, `training.seed: 0`, unified code). Log:
-  `outputs/unified_top_tagging_grade2_bivectors_full.log`. Result to be
-  filled in once it finishes.
+- **r4 full-mini reproduction (vs. 0.9786): DONE.** `config/top_tagging_grade2_bivectors.yaml`,
+  30 epochs, `training.seed: 0`, unified code. Log:
+  `outputs/unified_top_tagging_grade2_bivectors_full.log`. **Test AUC=0.9781,
+  accuracy=0.9250** vs. the untracked 0.9786/0.9245 — a -0.0005 AUC
+  difference, reported plainly and not graded pass/fail.
 - **r5c full-mini reproduction (vs. 0.9770):** blocked on regenerating
   `data/toptagging_mini_axes_phases.npz` (removed from disk; the full
   24000-jet `phases` precompute is a pure-Python, roughly-cubic-per-jet
