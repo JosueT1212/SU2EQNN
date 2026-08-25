@@ -1,0 +1,23 @@
+data:
+  path: data/toptagging_mini_axes.npz
+  rescale_data: true
+  two_beams: true
+  embedding: multi_channel
+  inject: []
+
+model:
+  in_mv_channels: 5
+  hidden_mv_channels: 16
+  num_blocks: 6
+  num_heads: 4
+
+training:
+  seed: 0
+  epochs: 30
+  batch_size: 32
+  lr: 1.0e-3
+  validate_every_n_steps: 200
+  checkpoint_path: checkpoints/top_tagging_grade2_bivectors_best.pt
+
+evaluation:
+  batch_size: 64

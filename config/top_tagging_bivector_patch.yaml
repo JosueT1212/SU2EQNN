@@ -13,6 +13,7 @@ model:
   num_heads: 4
 
 training:
+  seed: 0
   epochs: 30
   batch_size: 32
   lr: 1.0e-3

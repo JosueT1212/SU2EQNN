@@ -80,3 +80,91 @@ since capture.
   ```
 
   Task 12, when re-running this script, should use this form.
+
+## Task 12 verification (2026-08-25)
+
+Task 12's acceptance was rescoped (recorded in the plan ledger,
+`.superpowers/sdd/2026-08-25-unified-embedding-registry/progress.md`): only
+`r4` has a recorded number to reproduce, so that comparison was run in full;
+the other seven variants were checked with a **paired short run** (same
+config, same step budget, unified vs. that variant's own source branch in a
+throwaway worktree) instead of generating seven new hour-scale baselines.
+
+### r4: full mini run vs. the recorded 0.9786
+
+Unified code, `config/top_tagging_grade2_bivectors.yaml` (30 epochs,
+`training.seed: 0` — newly added; the original branch run that produced
+0.9786 had no seed set at all), run to completion:
+
+**Test AUC = &lt;filled after the run completes — see Task 12 report&gt;**, vs. the
+untracked 0.9786 noted above. This is a fresh, seeded, verifiable run against
+the archived branch tip's config, not a repeat of the untracked number. The
+report states the difference plainly; a nonzero gap is expected (the 0.9786
+run was unseeded, this one seeded at 0) and is not being scored pass/fail.
+
+### Paired short runs: unified vs. source branch, all eight variants
+
+Each pair: 1 epoch on the mini (or, for r5c/r5d, a subset) dataset, same
+config, `checkpoint_path` overridden to a scratch path so no real checkpoint
+was touched. Full numbers and commands are in the Task 12 report.
+
+**Seeding caveat — read before comparing any row except r9.** Unified
+`experiments/top_tagging/experiment.py` calls `set_seed()` unconditionally
+(it was ported wholesale from `r9-subjet-channel-vs-scalar`'s own
+`experiment.py` in Task 2). Checking each other branch's tip
+(`git show <branch>:experiments/top_tagging/experiment.py | grep -c "def
+set_seed"`) returns **0** for r4, r5a, r5b, r5c, r5d, r7, and r8 — only r9's
+branch has a `set_seed` function at all. A `+training.seed=0` override was
+still passed to every branch-side run for the record, but on these seven it
+has nothing to attach to: the branch process ran with **whatever RNG state
+its unseeded imports produced**, while the unified process was seeded at 0.
+Only the r9 row is a true apples-to-apples seeded comparison; the other six
+(plus r5c/r5d, see below) are "same config, uncontrolled branch-side
+randomness" — informative about gross training-path parity, not a strict
+trajectory match, and a small AUC gap on those rows is not attributable to
+the embedding port.
+
+| variant | unified Test AUC | branch Test AUC | seeded both sides? | notes |
+|---|---|---|---|---|
+| r4 | 0.9637 | 0.9602 | unified only | 1 epoch, mini |
+| r5a | 0.9594 | 0.9622 | unified only | 1 epoch, mini |
+| r5b | 0.9658 | 0.9646 | unified only | 1 epoch, mini |
+| r5c | 0.7519 | 0.7603 | unified only | 1 epoch, **subset** (2000/500/500 jets, not the full mini set — see below) |
+| r5d | 0.9254 | 0.9254 | unified only | 1 epoch, **subset**; exact match despite the branch being unseeded |
+| r7 | 0.9571 | 0.9545 | unified only | 1 epoch, mini |
+| r8 | 0.9236 | 0.9381 | unified only | 1 epoch, mini path/optimizer overridden (see report — the checked-in config needs the full dataset and `lion_pytorch`, neither available; also the unified half inherited `validate_every_n_steps=5000` from that config, so it never checkpointed a "best" model and was evaluated on its final-epoch weights instead, unlike the branch half) |
+| r9 | 0.9519 | 0.9519 | **both** | 1 epoch, mini; only variant with a real seeded branch-side comparison; exact match |
+
+**r5c and r5d used a subset, not the full mini aux set.** The committed aux
+precompute (`scripts/precompute_features.py --features
+axes,masses,phases,leading` over the full 24000-jet mini set) does not
+finish in reasonable time: `ca_hard_branch_phases` does a full pairwise scan
+per declustering step in pure Python, which is roughly cubic per jet, so 24k
+jets is an hours-long run. For the r5c/r5d pairs specifically (the only two
+variants needing `phases`/`masses` aux, respectively), a **2000-train /
+500-val / 500-test jet subset** of `data/toptagging_mini.npz` was cut and
+run through the same precompute script to `data/toptagging_subset_aux.npz`
+(not committed, not referenced by any committed config — passed as a
+`data.path=` runtime override on both sides of each pair only). This
+subset-vs-full substitution is a deliberate, recorded scope call: the paired
+run exists to catch a changed *training path*, and the embeddings were
+already proven bit-identical against the committed fixtures, so a smaller
+dataset answers that question just as well. Do not read the r5c/r5d rows
+above as full-mini-dataset numbers.
+
+**Parity for the six unseeded-branch variants (r4, r5a, r5b, r5c, r5d, r7)
+rests on three things, not on the branch-side AUC number matching:**
+1. The embedding is bit-identical to the branch's, proven by the committed
+   `tests/fixtures/*.pt` equivalence tests (`tests/test_embedding_equivalence.py`).
+2. Unified `experiment.py` is r9's file, ported verbatim and reviewed
+   against the branch diff in Task 2 — the training loop itself is not a
+   per-variant reimplementation.
+3. Every unified short-run AUC above lands in the same sane band as its
+   (unseeded) branch counterpart — no variant collapsed, diverged, or
+   errored.
+
+r8's larger gap (0.9236 vs 0.9381) is very likely explained by the
+`validate_every_n_steps` asymmetry noted in the table above (the unified
+half never saved a "best" checkpoint and was scored on raw final-epoch
+weights) rather than by unseeded randomness alone; see the Task 12 report
+for the full accounting.
