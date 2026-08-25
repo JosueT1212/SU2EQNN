@@ -95,3 +95,19 @@ def test_ca_phase_rejects_wrong_k():
     }
     with pytest.raises(ValueError, match="requires K=4"):
         build_embedding(cfg, torch.randn(5, 4), torch.tensor([0, 5]), aux)
+
+
+def test_triad_handedness_rejects_wrong_k():
+    from types import SimpleNamespace
+    import torch
+    from experiments.top_tagging.embedding import build_embedding
+
+    cfg = SimpleNamespace(data=SimpleNamespace(
+        embedding="multi_channel", inject=["triad_handedness"],
+        two_beams=True, rescale_data=True,
+    ))
+    aux = {
+        "axes": torch.eye(3).unsqueeze(0),            # K = 3, not 4
+    }
+    with pytest.raises(ValueError, match="requires K=4"):
+        build_embedding(cfg, torch.randn(5, 4), torch.tensor([0, 5]), aux)

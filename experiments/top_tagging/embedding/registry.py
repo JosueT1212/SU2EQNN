@@ -54,6 +54,7 @@ INJECTORS = {
         channels=AXIS_ALL,
         requires_aux=("axes",),
         requires_layout="multi_channel",
+        requires_k=4,
     ),
     "local_handedness": Injector(
         name="local_handedness",
