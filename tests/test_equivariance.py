@@ -654,10 +654,30 @@ def _random_rotation(seed):
     return q.to(torch.float32)
 
 
+# Variants whose slot 7 is identically zero in the plain (unrotated)
+# embedding -- no injector for that variant writes it (r4, r7 have no
+# injector at all; r5d's subjet_mass writes slot 0, not 7; r9's cos_theta
+# writes slot 4, not 7). For these four, the slot-7 half of the invariance
+# check below is a structural 0 == 0: it holds for any implementation and
+# provides no coverage of any injector. It is kept anyway (harmless, matches
+# the brief's literal sweep, and still catches an implementation that
+# accidentally starts writing slot 7), but the test asserts explicitly that
+# each such case really is the trivial kind, so a reader -- or a future
+# change to an injector -- can tell which of the 16 cases have teeth.
+# r5a, r5b, r5c and r8 all write nonzero content into slot 7 and are NOT
+# in this set; their slot-7 checks are the real thing.
+_SLOT7_IS_ZERO = {"r4", "r5d", "r7", "r9"}
+
+
 @pytest.mark.parametrize("variant", sorted(VARIANTS))
 @pytest.mark.parametrize("seed", [1, 2])
 def test_scalar_slots_are_rotation_invariant(variant, seed):
-    """Grade-0 (slot 0) and grade-3 (slot 7) outputs must not change under R."""
+    """Grade-0 (slot 0) and grade-3 (slot 7) outputs must not change under R.
+
+    Slot 0 (energy) is nonzero for every variant, so its invariance check
+    always has teeth; the test asserts that positively below. Slot 7 is a
+    structural zero for the variants in _SLOT7_IS_ZERO -- see that comment.
+    """
     layout, inject = VARIANTS[variant]
     fx = torch.load(f"{FIXTURE_DIR}/{variant}.pt", weights_only=False)
     inputs = fx["inputs"]
@@ -678,10 +698,86 @@ def test_scalar_slots_are_rotation_invariant(variant, seed):
 
     rotated = build_embedding(cfg, rot_fm, inputs["ptr"], rot_aux)
 
+    # At least one of the two checked slots must be non-trivial, or this
+    # whole case would be vacuous. Slot 0 (energy) always is.
+    assert plain["mv"][..., 0].abs().max() > 0, (
+        f"{variant}: slot 0 unexpectedly all-zero -- this sweep case would "
+        f"be entirely vacuous"
+    )
+
+    is_slot7_trivial = variant in _SLOT7_IS_ZERO
+    slot7_actually_zero = plain["mv"][..., 7].abs().max() == 0.0
+    assert is_slot7_trivial == slot7_actually_zero, (
+        f"{variant}: _SLOT7_IS_ZERO is stale (expected slot-7-is-zero to be "
+        f"{is_slot7_trivial}, got {slot7_actually_zero}) -- re-audit whether "
+        f"this variant's slot-7 invariance check is now informative"
+    )
+
     for slot in (0, 7):
         assert torch.allclose(
             plain["mv"][..., slot], rotated["mv"][..., slot], atol=1e-4
         ), f"{variant}: slot {slot} is not rotation invariant"
+
+
+def test_ca_phase_injector_values_and_invariance():
+    """ca_phase (r5c) writes precomputed C/A splitting-plane phases into
+    slot 7 of channels 1-4. This test exists because the sweep case above
+    for r5c is tautological: ca_phase's input (aux["phases"]) is a
+    precomputed pseudoscalar with no rotation law, so it is correctly never
+    rotated -- but that means the "rotated" call recomputes a bit-identical
+    tensor and the slot-7 invariance assertion above is 0 == 0 by
+    construction, for any implementation of ca_phase, correct or not.
+
+    This test instead: (1) checks the actual injected values against the
+    fixture's own aux["phases"], (2) checks slot 7 is untouched on channel 0
+    (the only channel ca_phase does not own), and (3) gives a non-vacuous
+    invariance check by rotating momenta+axes and confirming slot 7 stays
+    bit-identical while the genuine bivector channels (slots 4-6) actually
+    change -- i.e. it pins that rotation moves the geometric channels but
+    correctly leaves the precomputed phase slot alone.
+    """
+    from experiments.top_tagging.embedding import get_batch_from_ptr
+
+    layout, inject = VARIANTS["r5c"]
+    fx = torch.load(f"{FIXTURE_DIR}/r5c.pt", weights_only=False)
+    inputs = fx["inputs"]
+    aux = {k: v for k, v in inputs.items() if k not in ("fourmomenta", "ptr")}
+    cfg = _cfg(layout, inject)
+
+    plain = build_embedding(cfg, inputs["fourmomenta"], inputs["ptr"], aux)
+    particles = plain["mv"][~plain["is_beam"]]
+
+    # (1) injected values: slot 7 of channels 1-4 must equal each particle's
+    # jet's aux["phases"] row exactly (subjet_mass/ca_phase-style injectors
+    # copy verbatim, no rescaling).
+    particle_batch = get_batch_from_ptr(inputs["ptr"])
+    expected_phase = aux["phases"][particle_batch]   # (n_particles, 4)
+    assert torch.equal(particles[:, 1:5, 7], expected_phase),         "ca_phase: channels 1-4 slot 7 must equal the per-jet aux phases"
+
+    # (2) untouched elsewhere: ca_phase owns only channels 1-4; channel 0's
+    # slot 7 must stay exactly zero (no injector writes it for this variant).
+    assert particles[:, 0, 7].abs().max() == 0.0,         "ca_phase must not touch channel 0 slot 7"
+
+    # (3) non-vacuous invariance: rotate momenta + axes (never phases -- see
+    # docstring). Slot 7 must stay bit-identical to the unrotated case...
+    R = _random_rotation(1)
+    rot_fm = inputs["fourmomenta"].clone()
+    rot_fm[:, 1:4] = rot_fm[:, 1:4] @ R.T
+    rot_aux = dict(aux)
+    rot_aux["axes"] = aux["axes"] @ R.T
+
+    rotated = build_embedding(cfg, rot_fm, inputs["ptr"], rot_aux)
+    rot_particles = rotated["mv"][~rotated["is_beam"]]
+
+    assert torch.equal(particles[:, 1:5, 7], rot_particles[:, 1:5, 7]),         "ca_phase slot must stay bit-identical under rotation (precomputed, no rotation law)"
+
+    # ...while slots 4-6 (the real wedge bivector) are non-trivial and
+    # genuinely move under the same rotation -- otherwise (3) would just be
+    # re-proving the same vacuous 0 == 0 the sweep already has.
+    assert particles[:, 1:5, 4:7].abs().max() > 0,         "ca_phase: bivector channels 1-4 unexpectedly all-zero pre-rotation"
+    assert not torch.allclose(
+        particles[:, 1:5, 4:7], rot_particles[:, 1:5, 4:7], atol=1e-4
+    ), "ca_phase: bivector channels did not move under rotation -- invariance check above would be vacuous"
 
 
 # ---------------------------------------------------------------------------
@@ -1126,6 +1222,7 @@ if __name__ == "__main__":
     test_build_embedding_patch_equivariance()
     test_gatr_patch_mv_equivariance()
     test_gatr_patch_mv_equivariance_through_shared_embed()
+    test_ca_phase_injector_values_and_invariance()
     test_cos_theta_injector_slot_is_rotation_invariant()
     test_gatr_patch_mv_none_matches_no_patch()
     test_gatr_patch_mv_changes_output()
