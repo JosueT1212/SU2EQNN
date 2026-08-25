@@ -20,10 +20,7 @@ from su2eqnn.nets.gatr import GATr
 from su2eqnn.layers.attention.config import SelfAttentionConfig
 from su2eqnn.layers.mlp.config import MLPConfig
 from experiments.top_tagging.dataset import TopTaggingDataset
-from experiments.top_tagging.embedding import (
-    embed_tagging_data,
-    apply_axis_channel_dropout,
-)
+from experiments.top_tagging.embedding import build_embedding, apply_axis_channel_dropout
 from experiments.top_tagging.wrapper import TopTaggingWrapper
 
 log = logging.getLogger(__name__)
@@ -86,12 +83,7 @@ def evaluate(model, loader, cfg, device):
     with torch.no_grad():
         for batch in loader:
             batch = batch.to(device)
-            embedding = embed_tagging_data(
-                batch.x, batch.ptr,
-                two_beams=cfg.data.two_beams,
-                rescale=cfg.data.rescale_data,
-                axes=getattr(batch, "axes", None),
-            )
+            embedding = build_embedding(cfg, batch.x, batch.ptr, collect_aux(batch))
             logits = model(embedding)  # (B, 1)
             all_logits.append(logits.cpu())
             all_labels.append(batch.label.cpu())
@@ -173,12 +165,7 @@ def run_experiment(cfg: DictConfig) -> None:
 
         for batch in loader_train:
             batch = batch.to(device)
-            embedding = embed_tagging_data(
-                batch.x, batch.ptr,
-                two_beams=cfg.data.two_beams,
-                rescale=cfg.data.rescale_data,
-                axes=getattr(batch, "axes", None),
-            )
+            embedding = build_embedding(cfg, batch.x, batch.ptr, collect_aux(batch))
             if axis_dropout_p > 0.0:
                 embedding = apply_axis_channel_dropout(embedding, axis_dropout_p)
             logits = model(embedding)              # (B, 1)
