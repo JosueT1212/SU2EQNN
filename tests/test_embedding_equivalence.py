@@ -19,6 +19,7 @@ VARIANTS = {
     "r5d": ("multi_channel", ["subjet_mass"]),
     "r5a": ("multi_channel", ["triad_handedness"]),
     "r5b": ("multi_channel", ["local_handedness"]),
+    "r5c": ("multi_channel", ["ca_phase"]),
 }
 
 

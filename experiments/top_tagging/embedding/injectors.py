@@ -91,3 +91,13 @@ def local_handedness(mv, fourmomenta, ptr, particle_batch, aux, rescale) -> None
         v[j0:j1] = w @ pj
     cross_pv = torch.linalg.cross(p3, v)                      # (n, 3)
     mv[:, 1:, 7] = torch.einsum("nkd,nd->nk", ax, cross_pv)
+
+
+def ca_phase(mv, fourmomenta, ptr, particle_batch, aux, rescale) -> None:
+    """C-A splitting-plane phases into slot 7 of channels 1-4 (r5c).
+
+    sin(dpsi) between successive splitting planes on the hard branch, broadcast
+    per jet. O(1) by construction, so never rescaled.
+    """
+    phases = aux["phases"].to(mv.dtype)
+    mv[:, 1:5, 7] = phases[particle_batch]

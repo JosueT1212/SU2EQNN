@@ -63,6 +63,15 @@ INJECTORS = {
         requires_aux=("axes",),
         requires_layout="multi_channel",
     ),
+    "ca_phase": Injector(
+        name="ca_phase",
+        fn=injectors.ca_phase,
+        slot=7,
+        channels=AXIS_FIRST4,
+        requires_aux=("phases",),
+        requires_layout="multi_channel",
+        requires_k=4,
+    ),
 }
 
 
