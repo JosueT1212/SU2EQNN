@@ -937,53 +937,6 @@ def test_gatr_patch_mv_equivariance():
             f"GATr patch equivariance failed: {(path1_mv - path2_mv).abs().max():.2e}"
 
 
-def test_gatr_patch_mv_equivariance_through_shared_embed():
-    """Two-stage patch pathway (shared embed then per-block proj) stays Spin(3)-equivariant
-    when hidden_mv_channels != patch_mv_channels (exercises the actual bottleneck reshape)."""
-    from su2eqnn.layers.attention.config import SelfAttentionConfig
-    from su2eqnn.layers.mlp.config import MLPConfig
-    from su2eqnn.nets.gatr import GATr
-
-    ITEMS = 5
-    IN_MV, OUT_MV, HIDDEN_MV, PATCH_MV = 1, 1, 6, 4
-
-    net = GATr(
-        in_mv_channels=IN_MV,
-        out_mv_channels=OUT_MV,
-        hidden_mv_channels=HIDDEN_MV,
-        in_s_channels=None,
-        out_s_channels=None,
-        hidden_s_channels=None,
-        attention=SelfAttentionConfig(num_heads=2, multi_query=True, pos_encoding=False),
-        mlp=MLPConfig(activation="gelu"),
-        num_blocks=2,
-        patch_mv_channels=PATCH_MV,
-    )
-    net.eval()
-
-    for _ in range(N_TESTS):
-        x_mv = torch.randn(BATCH, ITEMS, IN_MV, 8)
-        patch_mv = torch.randn(BATCH, ITEMS, PATCH_MV, 8)
-        w = random_spin3()
-
-        def act(mv):
-            return torch.stack(
-                [spin3_action(w, mv[..., c, :]) for c in range(mv.shape[-2])], dim=-2
-            )
-
-        out_mv, _ = net(x_mv, scalars=None, patch_mv=patch_mv)
-        path1_mv, _ = net(act(x_mv), scalars=None, patch_mv=act(patch_mv))
-        path2_mv = act(out_mv)
-
-        assert torch.allclose(path1_mv, path2_mv, atol=1e-4), \
-            f"GATr shared-embed patch equivariance failed: {(path1_mv - path2_mv).abs().max():.2e}"
-
-
-
-# ---------------------------------------------------------------------------
-# cos_theta injector: dedicated slot-4 invariance check
-# ---------------------------------------------------------------------------
-
 def test_cos_theta_injector_slot_is_rotation_invariant():
     """The cos_theta injector writes an invariant scalar into mv[:, 0, 4].
 
@@ -1163,51 +1116,6 @@ def test_gatr_patch_proj_zero_preserved_with_nonzero_bias():
     )
 
 
-def test_gatr_patch_embed_zero_preserved_end_to_end():
-    """Zero patch_mv stays exactly zero through patch_embed AND patch_proj.
-
-    Confirms the shared embedding stage (EquiLinear(patch_mv_channels ->
-    hidden_mv_channels), bias=False) composes with the per-block projections
-    without breaking the zero-on-spurion invariant: spurion tokens carry
-    patch_mv == 0 exactly, and neither stage may inject spurious signal.
-    """
-    from su2eqnn.layers.attention.config import SelfAttentionConfig
-    from su2eqnn.layers.mlp.config import MLPConfig
-    from su2eqnn.nets.gatr import GATr
-
-    ITEMS = 5
-    IN_MV, OUT_MV, HIDDEN_MV, PATCH_MV = 1, 1, 6, 4
-
-    torch.manual_seed(0)
-    net = GATr(
-        in_mv_channels=IN_MV,
-        out_mv_channels=OUT_MV,
-        hidden_mv_channels=HIDDEN_MV,
-        in_s_channels=None,
-        out_s_channels=None,
-        hidden_s_channels=None,
-        attention=SelfAttentionConfig(num_heads=2, multi_query=True, pos_encoding=False),
-        mlp=MLPConfig(activation="gelu"),
-        num_blocks=2,
-        patch_mv_channels=PATCH_MV,
-    )
-    net.eval()
-    assert net.patch_embed is not None
-    assert net.patch_embed.bias is None, (
-        "patch_embed must be constructed with bias=False so that "
-        "patch_embed(zero patch_mv) stays exactly zero"
-    )
-
-    zero_patch_mv = torch.zeros(BATCH, ITEMS, PATCH_MV, 8)
-    patch_embedded, _ = net.patch_embed(zero_patch_mv)
-    assert torch.equal(patch_embedded, torch.zeros_like(patch_embedded))
-
-    out_mv, _ = net.patch_proj[0](patch_embedded)
-    assert torch.equal(out_mv, torch.zeros_like(out_mv)), (
-        "patch_proj[i](patch_embed(zero patch_mv)) must stay exactly zero, "
-        "otherwise spurion tokens receive spurious grade-0 signal"
-    )
-
 if __name__ == "__main__":
     test_spin3_inverse()
     test_spin3_norm_preservation()
@@ -1238,12 +1146,10 @@ if __name__ == "__main__":
     test_build_embedding_patch_channels()
     test_build_embedding_patch_equivariance()
     test_gatr_patch_mv_equivariance()
-    test_gatr_patch_mv_equivariance_through_shared_embed()
     test_ca_phase_injector_values_and_invariance()
     test_cos_theta_injector_slot_is_rotation_invariant()
     test_gatr_patch_mv_none_matches_no_patch()
     test_gatr_patch_mv_changes_output()
     test_gatr_patch_proj_zero_preserved_with_nonzero_bias()
-    test_gatr_patch_embed_zero_preserved_end_to_end()
     print("All equivariance tests passed.")
 

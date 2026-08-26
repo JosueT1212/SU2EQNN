@@ -41,11 +41,10 @@ class GATr(nn.Module):
     reinsert_s_channels : tuple of int or None
         Indices of input scalar channels to re-inject as additional Q/K features in every block.
     patch_mv_channels : int or None
-        When set, GATr owns one shared EquiLinear(patch_mv_channels -> hidden_mv_channels)
-        embedding stage, applied once, followed by one EquiLinear(hidden_mv_channels ->
-        hidden_mv_channels) per block whose output is added to the hidden multivector
-        stream immediately before each block runs (Li et al. 2208.07814-style patch
-        structure, adapted to be Spin(3)-equivariant). None disables the pathway entirely.
+        When set, GATr owns one EquiLinear(patch_mv_channels -> hidden_mv_channels)
+        per block and adds its output to the hidden multivector stream immediately
+        before each block runs (Li et al. 2208.07814-style patch structure, adapted
+        to be Spin(3)-equivariant). None disables the pathway entirely.
     checkpoint_blocks : bool
         Use gradient checkpointing to save memory at the cost of slower backward.
     dropout_prob : float or None
@@ -105,22 +104,10 @@ class GATr(nn.Module):
             for _ in range(num_blocks)
         ])
 
-        self.patch_embed = (
-            EquiLinear(
-                patch_mv_channels,
-                hidden_mv_channels,
-                in_s_channels=None,
-                out_s_channels=None,
-                bias=False,
-            )
-            if patch_mv_channels is not None
-            else None
-        )
-
         self.patch_proj = (
             nn.ModuleList([
                 EquiLinear(
-                    hidden_mv_channels,
+                    patch_mv_channels,
                     hidden_mv_channels,
                     in_s_channels=None,
                     out_s_channels=None,
@@ -167,13 +154,9 @@ class GATr(nn.Module):
 
         h_mv, h_s = self.linear_in(multivectors, scalars=scalars)
 
-        patch_embedded = None
-        if self.patch_embed is not None and patch_mv is not None:
-            patch_embedded, _ = self.patch_embed(patch_mv)
-
         for i, block in enumerate(self.blocks):
-            if self.patch_proj is not None and patch_embedded is not None:
-                patch_h_mv, _ = self.patch_proj[i](patch_embedded)
+            if self.patch_proj is not None and patch_mv is not None:
+                patch_h_mv, _ = self.patch_proj[i](patch_mv)
                 h_mv = h_mv + patch_h_mv
             if self._checkpoint_blocks:
                 h_mv, h_s = checkpoint(
