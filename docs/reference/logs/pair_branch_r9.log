@@ -1,0 +1,12 @@
+[2026-08-25 15:27:07,792][__main__][INFO] - Seeded RNGs with seed=0
+[2026-08-25 15:27:07,792][__main__][INFO] - Using device: cpu
+[2026-08-25 15:27:07,792][__main__][INFO] - Loading datasets...
+[2026-08-25 15:27:08,303][__main__][INFO] - Model parameters: 186,033
+[2026-08-25 15:28:16,757][__main__][INFO] - Step 200 | val AUC=0.9364 acc=0.8665
+[2026-08-25 15:28:16,787][__main__][INFO] - Saved best model (AUC=0.9364) to checkpoints/_pair_branch_r9.pt
+[2026-08-25 15:29:45,641][__main__][INFO] - Step 400 | val AUC=0.9442 acc=0.8935
+[2026-08-25 15:29:45,645][__main__][INFO] - Saved best model (AUC=0.9442) to checkpoints/_pair_branch_r9.pt
+[2026-08-25 15:30:43,107][__main__][INFO] - Step 600 | val AUC=0.9498 acc=0.8935
+[2026-08-25 15:30:43,109][__main__][INFO] - Saved best model (AUC=0.9498) to checkpoints/_pair_branch_r9.pt
+[2026-08-25 15:30:48,561][__main__][INFO] - Epoch 1/1 | loss=0.3626 | 220.3s
+[2026-08-25 15:30:56,433][__main__][INFO] - Test AUC=0.9519 | accuracy=0.8895

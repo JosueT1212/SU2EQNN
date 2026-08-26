@@ -52,6 +52,47 @@ logs and checkpoints under `outputs/<date>/<time>/` by default; override
 `training.checkpoint_path` in the config to control where the best
 checkpoint is written.
 
+## Running a variant on the unified embedding registry
+
+The `unify-embeddings` branch ports every branch listed below (and its old
+per-branch precompute/config dance) onto a single
+`experiments.top_tagging.embedding` registry, selected per-config by
+`data.embedding` (channel layout) and `data.inject` (which physics
+observable, if any, is written into which slot). This work is not yet on
+`main` — it lives on `unify-embeddings`, unmerged. Once merged, the old
+branches are meant to be archived, not deleted (see
+`docs/reference/variant-auc-baselines.md` for Task 12's reproduction
+results); from `unify-embeddings`, you no longer need to check one out to
+run its experiment.
+
+1. Precompute whichever aux features your chosen config needs (`axes`,
+   `masses`, `phases`, `leading`) with the unified script:
+
+   ```bash
+   .venv/bin/python scripts/precompute_features.py \
+     --features axes,masses,phases,leading \
+     data/toptagging_mini.npz data/toptagging_mini_aux.npz
+   ```
+
+   `--features axes` alone is fast; `phases` is not -- it is a pure-Python,
+   roughly-cubic-per-jet computation, and over the full 20000-jet mini
+   training split it takes on the order of hours. `data/toptagging_mini_axes.npz`
+   (axes only) already exists in the repo, so configs that only need `axes`
+   can skip this step.
+
+2. Pick a config and run it, same as above:
+
+   ```bash
+   PYTHONPATH=$(pwd) .venv/bin/python -m experiments.top_tagging.experiment \
+     --config-name top_tagging_pseudoscalar_triad
+   ```
+
+See **`docs/reference/embedding-variants.md`** for the full table mapping
+each old branch name to its `data.embedding` / `data.inject` values, the aux
+features it needs, and its config file — this is the reference for "the R5b
+experiment, what config is that now." For the physics behind each variant,
+see `Draft/main.tex`; this README does not restate it.
+
 Run tests on any branch with:
 
 ```bash

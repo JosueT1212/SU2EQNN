@@ -1,0 +1,11 @@
+[2026-08-26 11:21:31,905][__main__][INFO] - Using device: cpu
+[2026-08-26 11:21:31,905][__main__][INFO] - Loading datasets...
+[2026-08-26 11:21:32,376][__main__][INFO] - Model parameters: 185,649
+[2026-08-26 11:21:32,378][__main__][INFO] - Single-channel jet-axis embedding: pseudoscalar=off
+[2026-08-26 11:22:12,484][__main__][INFO] - Step 200 | val AUC=0.9076 acc=0.8280
+[2026-08-26 11:22:12,489][__main__][INFO] - Saved best model (AUC=0.9076) to checkpoints/_chk_a.pt
+[2026-08-26 11:22:51,293][__main__][INFO] - Step 400 | val AUC=0.9425 acc=0.8725
+[2026-08-26 11:22:51,297][__main__][INFO] - Saved best model (AUC=0.9425) to checkpoints/_chk_a.pt
+[2026-08-26 11:23:29,428][__main__][INFO] - Step 600 | val AUC=0.9415 acc=0.8825
+[2026-08-26 11:23:33,369][__main__][INFO] - Epoch 1/1 | loss=0.4044 | 121.0s
+[2026-08-26 11:23:39,544][__main__][INFO] - Test AUC=0.9314 | accuracy=0.8440

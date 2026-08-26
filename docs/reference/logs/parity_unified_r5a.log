@@ -1,0 +1,13 @@
+[2026-08-25 15:58:32,084][__main__][INFO] - Seeded RNGs with seed=0
+[2026-08-25 15:58:32,084][__main__][INFO] - Using device: cpu
+[2026-08-25 15:58:32,084][__main__][INFO] - Loading datasets...
+[2026-08-25 15:58:32,164][__main__][INFO] - Model parameters: 186,161
+[2026-08-25 15:58:39,489][__main__][INFO] - Step 15 | val AUC=0.8010 acc=0.7420
+[2026-08-25 15:58:39,494][__main__][INFO] - Saved best model (AUC=0.8010) to checkpoints/_parity_unified_r5a.pt
+[2026-08-25 15:58:44,854][__main__][INFO] - Step 30 | val AUC=0.8609 acc=0.7740
+[2026-08-25 15:58:44,856][__main__][INFO] - Saved best model (AUC=0.8609) to checkpoints/_parity_unified_r5a.pt
+[2026-08-25 15:58:50,290][__main__][INFO] - Step 45 | val AUC=0.8697 acc=0.7980
+[2026-08-25 15:58:50,293][__main__][INFO] - Saved best model (AUC=0.8697) to checkpoints/_parity_unified_r5a.pt
+[2026-08-25 15:58:55,633][__main__][INFO] - Step 60 | val AUC=0.8491 acc=0.7740
+[2026-08-25 15:58:56,191][__main__][INFO] - Epoch 1/1 | loss=0.5785 | 24.0s
+[2026-08-25 15:58:58,273][__main__][INFO] - Test AUC=0.8516 | accuracy=0.7860

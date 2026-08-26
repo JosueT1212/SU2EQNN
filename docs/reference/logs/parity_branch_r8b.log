@@ -1,0 +1,14 @@
+[2026-08-25 16:07:09,210][__main__][INFO] - Using device: cpu
+[2026-08-25 16:07:09,210][__main__][INFO] - Loading datasets...
+[2026-08-25 16:07:09,283][__main__][INFO] - Model parameters: 185,649
+[2026-08-25 16:07:09,286][__main__][INFO] - Single-channel jet-axis embedding: pseudoscalar=on
+[2026-08-25 16:07:17,534][__main__][INFO] - Step 15 | val AUC=0.7811 acc=0.5600
+[2026-08-25 16:07:17,538][__main__][INFO] - Saved best model (AUC=0.7811) to checkpoints/_parity_branch_r8b.pt
+[2026-08-25 16:07:22,753][__main__][INFO] - Step 30 | val AUC=0.7953 acc=0.6940
+[2026-08-25 16:07:22,755][__main__][INFO] - Saved best model (AUC=0.7953) to checkpoints/_parity_branch_r8b.pt
+[2026-08-25 16:07:28,453][__main__][INFO] - Step 45 | val AUC=0.7965 acc=0.6900
+[2026-08-25 16:07:28,456][__main__][INFO] - Saved best model (AUC=0.7965) to checkpoints/_parity_branch_r8b.pt
+[2026-08-25 16:07:33,682][__main__][INFO] - Step 60 | val AUC=0.7998 acc=0.6780
+[2026-08-25 16:07:33,685][__main__][INFO] - Saved best model (AUC=0.7998) to checkpoints/_parity_branch_r8b.pt
+[2026-08-25 16:07:34,246][__main__][INFO] - Epoch 1/1 | loss=0.6291 | 25.0s
+[2026-08-25 16:07:36,232][__main__][INFO] - Test AUC=0.7761 | accuracy=0.6460

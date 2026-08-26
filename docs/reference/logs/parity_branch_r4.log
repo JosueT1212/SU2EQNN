@@ -1,0 +1,13 @@
+[2026-08-25 15:57:48,366][__main__][INFO] - Using device: cpu
+[2026-08-25 15:57:48,366][__main__][INFO] - Loading datasets...
+[2026-08-25 15:57:48,427][__main__][INFO] - Model parameters: 186,161
+[2026-08-25 15:57:55,725][__main__][INFO] - Step 15 | val AUC=0.7802 acc=0.5600
+[2026-08-25 15:57:55,730][__main__][INFO] - Saved best model (AUC=0.7802) to checkpoints/_parity_branch_r4.pt
+[2026-08-25 15:58:01,170][__main__][INFO] - Step 30 | val AUC=0.8381 acc=0.7180
+[2026-08-25 15:58:01,173][__main__][INFO] - Saved best model (AUC=0.8381) to checkpoints/_parity_branch_r4.pt
+[2026-08-25 15:58:06,509][__main__][INFO] - Step 45 | val AUC=0.8982 acc=0.7840
+[2026-08-25 15:58:06,512][__main__][INFO] - Saved best model (AUC=0.8982) to checkpoints/_parity_branch_r4.pt
+[2026-08-25 15:58:11,862][__main__][INFO] - Step 60 | val AUC=0.9097 acc=0.8100
+[2026-08-25 15:58:11,865][__main__][INFO] - Saved best model (AUC=0.9097) to checkpoints/_parity_branch_r4.pt
+[2026-08-25 15:58:12,426][__main__][INFO] - Epoch 1/1 | loss=0.6024 | 24.0s
+[2026-08-25 15:58:14,870][__main__][INFO] - Test AUC=0.9037 | accuracy=0.8220

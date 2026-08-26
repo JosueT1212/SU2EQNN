@@ -20,10 +20,37 @@ from su2eqnn.nets.gatr import GATr
 from su2eqnn.layers.attention.config import SelfAttentionConfig
 from su2eqnn.layers.mlp.config import MLPConfig
 from experiments.top_tagging.dataset import TopTaggingDataset
-from experiments.top_tagging.embedding import embed_tagging_data
-from experiments.top_tagging.wrapper import TopTaggingWrapper
+from experiments.top_tagging.embedding import (
+    build_embedding, apply_axis_channel_dropout, apply_patch_channel_dropout,
+)
+from experiments.top_tagging.wrapper import TopTaggingWrapper, TopTaggingWrapperBivectorPatch
 
 log = logging.getLogger(__name__)
+
+
+def set_seed(seed) -> None:
+    """Seed random/numpy/torch RNGs for reproducibility. No-op if seed is None."""
+    if seed is None:
+        return
+    import random
+    import numpy as np
+
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    log.info(f"Seeded RNGs with seed={seed}")
+
+
+AUX_ATTRS = ("axes", "masses", "phases", "p_lead")
+
+
+def collect_aux(batch) -> dict:
+    """Gather the per-jet auxiliary tensors present on a collated batch."""
+    return {
+        name: getattr(batch, name)
+        for name in AUX_ATTRS
+        if getattr(batch, name, None) is not None
+    }
 
 
 def build_model(cfg) -> TopTaggingWrapper:
@@ -35,9 +62,11 @@ def build_model(cfg) -> TopTaggingWrapper:
         hidden_mv_channels : int
         num_blocks         : int
         num_heads          : int
+        in_mv_channels     : int (optional, default 1)
     """
+    patch_mv_channels = getattr(cfg.model, "patch_mv_channels", None)
     net = GATr(
-        in_mv_channels=1,
+        in_mv_channels=getattr(cfg.model, "in_mv_channels", 1),
         out_mv_channels=1,
         hidden_mv_channels=cfg.model.hidden_mv_channels,
         in_s_channels=None,
@@ -46,7 +75,10 @@ def build_model(cfg) -> TopTaggingWrapper:
         attention=SelfAttentionConfig(num_heads=cfg.model.num_heads),
         mlp=MLPConfig(activation="gelu"),
         num_blocks=cfg.model.num_blocks,
+        patch_mv_channels=patch_mv_channels,
     )
+    if patch_mv_channels is not None:
+        return TopTaggingWrapperBivectorPatch(net)
     return TopTaggingWrapper(net)
 
 
@@ -57,11 +89,7 @@ def evaluate(model, loader, cfg, device):
     with torch.no_grad():
         for batch in loader:
             batch = batch.to(device)
-            embedding = embed_tagging_data(
-                batch.x, batch.ptr,
-                two_beams=cfg.data.two_beams,
-                rescale=cfg.data.rescale_data,
-            )
+            embedding = build_embedding(cfg, batch.x, batch.ptr, collect_aux(batch))
             logits = model(embedding)  # (B, 1)
             all_logits.append(logits.cpu())
             all_labels.append(batch.label.cpu())
@@ -77,6 +105,7 @@ def evaluate(model, loader, cfg, device):
 
 def run_experiment(cfg: DictConfig) -> None:
     """Training + evaluation loop."""
+    set_seed(getattr(cfg.training, "seed", None))
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     log.info(f"Using device: {device}")
 
@@ -98,7 +127,34 @@ def run_experiment(cfg: DictConfig) -> None:
     n_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
     log.info(f"Model parameters: {n_params:,}")
 
-    optimizer = torch.optim.Adam(model.parameters(), lr=cfg.training.lr)
+    optimizer_name = str(getattr(cfg.training, "optimizer", "adam")).lower()
+    if optimizer_name == "lion":
+        from lion_pytorch import Lion
+
+        optimizer = Lion(
+            model.parameters(),
+            lr=cfg.training.lr,
+            weight_decay=float(getattr(cfg.training, "weight_decay", 0.0)),
+        )
+        log.info(
+            f"Using Lion optimizer: lr={cfg.training.lr}, "
+            f"weight_decay={getattr(cfg.training, 'weight_decay', 0.0)}"
+        )
+    else:
+        optimizer = torch.optim.Adam(model.parameters(), lr=cfg.training.lr)
+    scheduler = None
+    if getattr(cfg.training, "scheduler", None) == "cosine_warm_restarts":
+        scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(
+            optimizer,
+            T_0=cfg.training.scheduler_t0_steps,
+            T_mult=1,
+            eta_min=cfg.training.eta_min,
+        )
+        log.info(
+            f"Using CosineAnnealingWarmRestarts: T_0={cfg.training.scheduler_t0_steps} "
+            f"steps, eta_min={cfg.training.eta_min}"
+        )
+    axis_dropout_p = float(getattr(cfg.training, "axis_dropout_p", 0.0))
     criterion = torch.nn.BCEWithLogitsLoss()
 
     best_auc = 0.0
@@ -115,11 +171,10 @@ def run_experiment(cfg: DictConfig) -> None:
 
         for batch in loader_train:
             batch = batch.to(device)
-            embedding = embed_tagging_data(
-                batch.x, batch.ptr,
-                two_beams=cfg.data.two_beams,
-                rescale=cfg.data.rescale_data,
-            )
+            embedding = build_embedding(cfg, batch.x, batch.ptr, collect_aux(batch))
+            if axis_dropout_p > 0.0:
+                apply_axis_channel_dropout(embedding, axis_dropout_p)
+                apply_patch_channel_dropout(embedding, axis_dropout_p)
             logits = model(embedding)              # (B, 1)
             targets = batch.label.float().unsqueeze(1)  # (B, 1)
             loss = criterion(logits, targets)
@@ -127,6 +182,8 @@ def run_experiment(cfg: DictConfig) -> None:
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
+            if scheduler is not None:
+                scheduler.step()
 
             epoch_loss += loss.item()
             global_step += 1

@@ -40,6 +40,12 @@ class GATr(nn.Module):
         Enables stable injection of reference vectors (e.g. beam token) through all blocks.
     reinsert_s_channels : tuple of int or None
         Indices of input scalar channels to re-inject as additional Q/K features in every block.
+    patch_mv_channels : int or None
+        When set, GATr owns one shared EquiLinear(patch_mv_channels -> hidden_mv_channels)
+        embedding stage, applied once, followed by one EquiLinear(hidden_mv_channels ->
+        hidden_mv_channels) per block whose output is added to the hidden multivector
+        stream immediately before each block runs (Li et al. 2208.07814-style patch
+        structure, adapted to be Spin(3)-equivariant). None disables the pathway entirely.
     checkpoint_blocks : bool
         Use gradient checkpointing to save memory at the cost of slower backward.
     dropout_prob : float or None
@@ -59,6 +65,7 @@ class GATr(nn.Module):
         num_blocks: int = 10,
         reinsert_mv_channels: Optional[Tuple[int, ...]] = None,
         reinsert_s_channels: Optional[Tuple[int, ...]] = None,
+        patch_mv_channels: Optional[int] = None,
         checkpoint_blocks: bool = False,
         dropout_prob: Optional[float] = None,
         double_layernorm: bool = False,
@@ -98,6 +105,33 @@ class GATr(nn.Module):
             for _ in range(num_blocks)
         ])
 
+        self.patch_embed = (
+            EquiLinear(
+                patch_mv_channels,
+                hidden_mv_channels,
+                in_s_channels=None,
+                out_s_channels=None,
+                bias=False,
+            )
+            if patch_mv_channels is not None
+            else None
+        )
+
+        self.patch_proj = (
+            nn.ModuleList([
+                EquiLinear(
+                    hidden_mv_channels,
+                    hidden_mv_channels,
+                    in_s_channels=None,
+                    out_s_channels=None,
+                    bias=False,
+                )
+                for _ in range(num_blocks)
+            ])
+            if patch_mv_channels is not None
+            else None
+        )
+
         self.linear_out = EquiLinear(
             hidden_mv_channels,
             out_mv_channels,
@@ -110,6 +144,7 @@ class GATr(nn.Module):
         multivectors: torch.Tensor,
         scalars: Optional[torch.Tensor] = None,
         attention_mask: Optional[torch.Tensor] = None,
+        patch_mv: Optional[torch.Tensor] = None,
     ) -> Tuple[torch.Tensor, Optional[torch.Tensor]]:
         """Forward pass.
 
@@ -118,6 +153,8 @@ class GATr(nn.Module):
         multivectors : Tensor (..., items, in_mv_channels, 8)
         scalars : Tensor (..., items, in_s_channels) or None
         attention_mask : Tensor (..., items, items) or None
+        patch_mv : Tensor (..., items, patch_mv_channels, 8) or None
+            Re-injected at every block when patch_mv_channels was set at construction.
 
         Returns
         -------
@@ -130,7 +167,14 @@ class GATr(nn.Module):
 
         h_mv, h_s = self.linear_in(multivectors, scalars=scalars)
 
-        for block in self.blocks:
+        patch_embedded = None
+        if self.patch_embed is not None and patch_mv is not None:
+            patch_embedded, _ = self.patch_embed(patch_mv)
+
+        for i, block in enumerate(self.blocks):
+            if self.patch_proj is not None and patch_embedded is not None:
+                patch_h_mv, _ = self.patch_proj[i](patch_embedded)
+                h_mv = h_mv + patch_h_mv
             if self._checkpoint_blocks:
                 h_mv, h_s = checkpoint(
                     block,

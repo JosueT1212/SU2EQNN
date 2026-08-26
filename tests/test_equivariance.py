@@ -618,6 +618,586 @@ def test_gatr_equivariance():
             f"GATr scalar invariance failed: {(path1_s - out_s).abs().max():.2e}"
 
 
+
+# ---------------------------------------------------------------------------
+# Registry sweep: every registered layout/injector combination
+# ---------------------------------------------------------------------------
+#
+# Every registered layout/injector combination must be Spin(3)-equivariant.
+#
+# A rotation R acting on the input momenta and on the reference axes must act
+# on the output multivectors by the corresponding rotor: grade-1 slots rotate
+# as vectors, grade-2 slots as bivectors, and grade-0/grade-3 slots are
+# invariant.
+#
+# Deliberate exception: hybrid_r9 + cos_theta. r9's experimental hypothesis
+# is to write a rotation-invariant scalar (cos_theta) into channel 0's e12
+# slot -- a grade-2 slot that would otherwise be expected to transform as a
+# bivector. This is a faithful port of r9's design, not a bug; see the
+# hybrid_r9 docstring in layouts.py and the cos_theta docstring in
+# injectors.py for why.
+#
+# Caveat: the kT subjet axes and the C/A tree are computed in the beam frame,
+# so *precomputed* aux is only equivariant under azimuthal rotations in
+# production. This test rotates the aux tensors explicitly, which isolates
+# the embedding's own equivariance -- the property being asserted -- from the
+# aux producer's frame dependence.
+
+import pytest
+
+from experiments.top_tagging.embedding import build_embedding
+from tests.test_embedding_equivalence import VARIANTS, _cfg
+
+FIXTURE_DIR = "tests/fixtures"
+
+
+def _random_rotation(seed):
+    """Uniform-ish SO(3) element via QR of a Gaussian matrix, det forced to +1."""
+    g = torch.Generator().manual_seed(seed)
+    q, r = torch.linalg.qr(torch.randn(3, 3, generator=g, dtype=torch.float64))
+    q = q * torch.sign(torch.diagonal(r)).unsqueeze(0)
+    if torch.det(q) < 0:
+        q[:, 0] = -q[:, 0]
+    return q.to(torch.float32)
+
+
+# Variants whose slot 7 is identically zero in the plain (unrotated)
+# embedding -- no injector for that variant writes it (r4, r7 have no
+# injector at all; r5d's subjet_mass writes slot 0, not 7; r9's cos_theta
+# writes slot 4, not 7). For these four, the slot-7 half of the invariance
+# check below is a structural 0 == 0: it holds for any implementation and
+# provides no coverage of any injector. It is kept anyway (harmless, matches
+# the brief's literal sweep, and still catches an implementation that
+# accidentally starts writing slot 7), but the test asserts explicitly that
+# each such case really is the trivial kind, so a reader -- or a future
+# change to an injector -- can tell which of the 16 cases have teeth.
+# r5a, r5b, r5c and r8 all write nonzero content into slot 7 and are NOT
+# in this set; their slot-7 checks are the real thing.
+_SLOT7_IS_ZERO = {"r4", "r5d", "r7", "r9"}
+
+
+@pytest.mark.parametrize("variant", sorted(VARIANTS))
+@pytest.mark.parametrize("seed", [1, 2])
+def test_scalar_slots_are_rotation_invariant(variant, seed):
+    """Grade-0 (slot 0) and grade-3 (slot 7) outputs must not change under R.
+
+    Slot 0 (energy) is nonzero for every variant, so its invariance check
+    always has teeth; the test asserts that positively below. Slot 7 is a
+    structural zero for the variants in _SLOT7_IS_ZERO -- see that comment.
+    """
+    layout, inject = VARIANTS[variant]
+    fx = torch.load(f"{FIXTURE_DIR}/{variant}.pt", weights_only=False)
+    inputs = fx["inputs"]
+    aux = {k: v for k, v in inputs.items() if k not in ("fourmomenta", "ptr")}
+    cfg = _cfg(layout, inject)
+
+    plain = build_embedding(cfg, inputs["fourmomenta"], inputs["ptr"], aux)
+
+    R = _random_rotation(seed)
+    rot_fm = inputs["fourmomenta"].clone()
+    rot_fm[:, 1:4] = rot_fm[:, 1:4] @ R.T
+    rot_aux = dict(aux)
+    rot_aux["axes"] = aux["axes"] @ R.T
+    if "p_lead" in aux:
+        pl = aux["p_lead"].clone()
+        pl[:, 1:4] = pl[:, 1:4] @ R.T
+        rot_aux["p_lead"] = pl
+
+    rotated = build_embedding(cfg, rot_fm, inputs["ptr"], rot_aux)
+
+    # At least one of the two checked slots must be non-trivial, or this
+    # whole case would be vacuous. Slot 0 (energy) always is.
+    assert plain["mv"][..., 0].abs().max() > 0, (
+        f"{variant}: slot 0 unexpectedly all-zero -- this sweep case would "
+        f"be entirely vacuous"
+    )
+
+    is_slot7_trivial = variant in _SLOT7_IS_ZERO
+    slot7_actually_zero = plain["mv"][..., 7].abs().max() == 0.0
+    assert is_slot7_trivial == slot7_actually_zero, (
+        f"{variant}: _SLOT7_IS_ZERO is stale (expected slot-7-is-zero to be "
+        f"{is_slot7_trivial}, got {slot7_actually_zero}) -- re-audit whether "
+        f"this variant's slot-7 invariance check is now informative"
+    )
+
+    for slot in (0, 7):
+        assert torch.allclose(
+            plain["mv"][..., slot], rotated["mv"][..., slot], atol=1e-4
+        ), f"{variant}: slot {slot} is not rotation invariant"
+
+
+def test_ca_phase_injector_values_and_invariance():
+    """ca_phase (r5c) writes precomputed C/A splitting-plane phases into
+    slot 7 of channels 1-4. This test exists because the sweep case above
+    for r5c is tautological: ca_phase's input (aux["phases"]) is a
+    precomputed pseudoscalar with no rotation law, so it is correctly never
+    rotated -- but that means the "rotated" call recomputes a bit-identical
+    tensor and the slot-7 invariance assertion above is 0 == 0 by
+    construction, for any implementation of ca_phase, correct or not.
+
+    This test instead: (1) checks the actual injected values against the
+    fixture's own aux["phases"], (2) checks slot 7 is untouched on channel 0
+    (the only channel ca_phase does not own), and (3) gives a non-vacuous
+    invariance check by rotating momenta+axes and confirming slot 7 stays
+    bit-identical while the genuine bivector channels (slots 4-6) actually
+    change -- i.e. it pins that rotation moves the geometric channels but
+    correctly leaves the precomputed phase slot alone.
+    """
+    from experiments.top_tagging.embedding import get_batch_from_ptr
+
+    layout, inject = VARIANTS["r5c"]
+    fx = torch.load(f"{FIXTURE_DIR}/r5c.pt", weights_only=False)
+    inputs = fx["inputs"]
+    aux = {k: v for k, v in inputs.items() if k not in ("fourmomenta", "ptr")}
+    cfg = _cfg(layout, inject)
+
+    plain = build_embedding(cfg, inputs["fourmomenta"], inputs["ptr"], aux)
+    particles = plain["mv"][~plain["is_beam"]]
+
+    # (1) injected values: slot 7 of channels 1-4 must equal each particle's
+    # jet's aux["phases"] row exactly (subjet_mass/ca_phase-style injectors
+    # copy verbatim, no rescaling).
+    particle_batch = get_batch_from_ptr(inputs["ptr"])
+    expected_phase = aux["phases"][particle_batch]   # (n_particles, 4)
+    assert torch.equal(particles[:, 1:5, 7], expected_phase),         "ca_phase: channels 1-4 slot 7 must equal the per-jet aux phases"
+
+    # (2) untouched elsewhere: ca_phase owns only channels 1-4; channel 0's
+    # slot 7 must stay exactly zero (no injector writes it for this variant).
+    assert particles[:, 0, 7].abs().max() == 0.0,         "ca_phase must not touch channel 0 slot 7"
+
+    # (3) non-vacuous invariance: rotate momenta + axes (never phases -- see
+    # docstring). Slot 7 must stay bit-identical to the unrotated case...
+    R = _random_rotation(1)
+    rot_fm = inputs["fourmomenta"].clone()
+    rot_fm[:, 1:4] = rot_fm[:, 1:4] @ R.T
+    rot_aux = dict(aux)
+    rot_aux["axes"] = aux["axes"] @ R.T
+
+    rotated = build_embedding(cfg, rot_fm, inputs["ptr"], rot_aux)
+    rot_particles = rotated["mv"][~rotated["is_beam"]]
+
+    assert torch.equal(particles[:, 1:5, 7], rot_particles[:, 1:5, 7]),         "ca_phase slot must stay bit-identical under rotation (precomputed, no rotation law)"
+
+    # ...while slots 4-6 (the real wedge bivector) are non-trivial and
+    # genuinely move under the same rotation -- otherwise (3) would just be
+    # re-proving the same vacuous 0 == 0 the sweep already has.
+    assert particles[:, 1:5, 4:7].abs().max() > 0,         "ca_phase: bivector channels 1-4 unexpectedly all-zero pre-rotation"
+    assert not torch.allclose(
+        particles[:, 1:5, 4:7], rot_particles[:, 1:5, 4:7], atol=1e-4
+    ), "ca_phase: bivector channels did not move under rotation -- invariance check above would be vacuous"
+
+
+# ---------------------------------------------------------------------------
+# Patch pathway (r7): equivariance tests ported from r7-patch-injection,
+# which were outside the checkout list for the earlier porting task and were
+# never carried over. The embedding-level pair below is adapted to the
+# current API: build_embedding(cfg, ...) with embedding="patch", and
+# patch_mv as a returned key (r7's branch had a standalone
+# embed_tagging_data_bivector_patch function that returned patch_mv
+# directly). The GATr-net-level pair is ported verbatim: su2eqnn.nets.gatr
+# already exposes patch_mv_channels/patch_mv unchanged from r7.
+# ---------------------------------------------------------------------------
+
+def test_build_embedding_patch_channels():
+    """patch layout: mv is plain (channel-0-only); patch_mv carries the wedges.
+
+    Not covered by the parametrized sweep above, which only checks slots 0
+    and 7 of "mv" -- it never inspects "patch_mv" at all.
+    """
+    from experiments.top_tagging.embedding import UNITS
+
+    fourmomenta = torch.tensor([
+        [40.0, 3.0, 0.0, 4.0],
+        [10.0, 0.0, 1.0, 2.0],
+        [20.0, 1.0, 1.0, 5.0],
+    ])
+    ptr = torch.tensor([0, 2, 3])
+    axes = torch.zeros(2, 4, 3)
+    axes[:, :, 2] = 1.0   # all axes = +z
+
+    cfg = _cfg("patch", [])
+    out = build_embedding(cfg, fourmomenta, ptr, {"axes": axes})
+    mv = out["mv"]
+    patch_mv = out["patch_mv"]
+
+    assert mv.shape[1] == 1, f"expected plain 1-channel mv, got {mv.shape[1]}"
+    assert patch_mv.shape[1] == 4, f"expected 4 patch channels, got {patch_mv.shape[1]}"
+
+    particles_mv = mv[~out["is_beam"]]          # (3, 1, 8)
+    particles_patch = patch_mv[~out["is_beam"]]  # (3, 4, 8)
+    p = fourmomenta / UNITS
+
+    # mv channel 0: E, px, py, pz -- identical to the plain kinematic channel
+    assert torch.allclose(particles_mv[:, 0, 0], p[:, 0], atol=1e-6)
+    assert torch.allclose(particles_mv[:, 0, 1:4], p[:, 1:4], atol=1e-6)
+
+    # patch_mv with n̂ = +z: wedge = px*e13 + py*e23
+    for k in range(4):
+        assert particles_patch[:, k, 4].abs().max() < 1e-6
+        assert torch.allclose(particles_patch[:, k, 5], p[:, 1], atol=1e-6)
+        assert torch.allclose(particles_patch[:, k, 6], p[:, 2], atol=1e-6)
+        assert particles_patch[:, k, 0:4].abs().max() < 1e-6, "patch channels must be pure grade-2"
+        assert particles_patch[:, k, 7].abs().max() < 1e-6
+
+    # spurion tokens: mv has normal beam content, patch_mv is exactly zero
+    beams_patch = patch_mv[out["is_beam"]]
+    assert beams_patch.abs().max() < 1e-6, "patch_mv must be zero on spurion tokens"
+
+
+def test_build_embedding_patch_equivariance():
+    """Rotating momenta AND axes rotates both mv and patch_mv by ρ(w).
+
+    Not covered by the parametrized sweep above: the sweep only checks that
+    the invariant slots (0, 7) of "mv" are unchanged; it does not check the
+    full bivector transformation law, and it never touches "patch_mv".
+    """
+    from su2eqnn.interface.vector import embed_vector, extract_vector
+
+    def rotate3(w, v):
+        """Rotate 3-vectors (n,3) via the Spin(3) sandwich on grade-1."""
+        return torch.stack([extract_vector(spin3_action(w, embed_vector(v[i])))
+                            for i in range(v.shape[0])])
+
+    cfg = _cfg("patch", [])
+    cfg.data.two_beams = False
+    cfg.data.rescale_data = False
+
+    for _ in range(10):
+        fourmomenta = torch.randn(6, 4)
+        ptr = torch.tensor([0, 3, 6])
+        axes = torch.randn(2, 4, 3)
+        axes = axes / axes.norm(dim=-1, keepdim=True)
+        w = random_spin3()
+
+        out = build_embedding(cfg, fourmomenta, ptr, {"axes": axes})
+
+        rot_p = fourmomenta.clone()
+        rot_p[:, 1:4] = rotate3(w, fourmomenta[:, 1:4])
+        rot_axes = torch.stack([rotate3(w, axes[j]) for j in range(axes.shape[0])])
+        out_rot = build_embedding(cfg, rot_p, ptr, {"axes": rot_axes})
+
+        # Beam spurion tokens are fixed lab-frame directions (unaffected by
+        # rotating fourmomenta/axes) and are therefore not equivariant under
+        # a general Spin(3) rotation by construction -- only particle tokens
+        # are expected to satisfy the equivariance check here.
+        mask = ~out["is_beam"]
+        expected_mv = spin3_action_channels(w, out["mv"])
+        expected_patch = spin3_action_channels(w, out["patch_mv"])
+
+        assert torch.allclose(out_rot["mv"][mask], expected_mv[mask], atol=1e-4), \
+            f"patch mv equivariance failed: {(out_rot['mv'][mask] - expected_mv[mask]).abs().max():.2e}"
+        assert torch.allclose(out_rot["patch_mv"][mask], expected_patch[mask], atol=1e-4), \
+            f"patch_mv equivariance failed: {(out_rot['patch_mv'][mask] - expected_patch[mask]).abs().max():.2e}"
+
+
+def test_gatr_patch_mv_equivariance():
+    """GATr with patch injection commutes with Spin(3) when momenta AND patch_mv co-rotate."""
+    from su2eqnn.layers.attention.config import SelfAttentionConfig
+    from su2eqnn.layers.mlp.config import MLPConfig
+    from su2eqnn.nets.gatr import GATr
+
+    ITEMS = 5
+    IN_MV, OUT_MV, HIDDEN_MV, PATCH_MV = 1, 1, 4, 4
+
+    net = GATr(
+        in_mv_channels=IN_MV,
+        out_mv_channels=OUT_MV,
+        hidden_mv_channels=HIDDEN_MV,
+        in_s_channels=None,
+        out_s_channels=None,
+        hidden_s_channels=None,
+        attention=SelfAttentionConfig(num_heads=2, multi_query=True, pos_encoding=False),
+        mlp=MLPConfig(activation="gelu"),
+        num_blocks=2,
+        patch_mv_channels=PATCH_MV,
+    )
+    net.eval()
+
+    for _ in range(N_TESTS):
+        x_mv = torch.randn(BATCH, ITEMS, IN_MV, 8)
+        patch_mv = torch.randn(BATCH, ITEMS, PATCH_MV, 8)
+        w = random_spin3()
+
+        def act(mv):
+            return torch.stack(
+                [spin3_action(w, mv[..., c, :]) for c in range(mv.shape[-2])], dim=-2
+            )
+
+        out_mv, _ = net(x_mv, scalars=None, patch_mv=patch_mv)
+        path1_mv, _ = net(act(x_mv), scalars=None, patch_mv=act(patch_mv))
+        path2_mv = act(out_mv)
+
+        assert torch.allclose(path1_mv, path2_mv, atol=1e-4), \
+            f"GATr patch equivariance failed: {(path1_mv - path2_mv).abs().max():.2e}"
+
+
+def test_gatr_patch_mv_equivariance_through_shared_embed():
+    """Two-stage patch pathway (shared embed then per-block proj) stays Spin(3)-equivariant
+    when hidden_mv_channels != patch_mv_channels (exercises the actual bottleneck reshape)."""
+    from su2eqnn.layers.attention.config import SelfAttentionConfig
+    from su2eqnn.layers.mlp.config import MLPConfig
+    from su2eqnn.nets.gatr import GATr
+
+    ITEMS = 5
+    IN_MV, OUT_MV, HIDDEN_MV, PATCH_MV = 1, 1, 6, 4
+
+    net = GATr(
+        in_mv_channels=IN_MV,
+        out_mv_channels=OUT_MV,
+        hidden_mv_channels=HIDDEN_MV,
+        in_s_channels=None,
+        out_s_channels=None,
+        hidden_s_channels=None,
+        attention=SelfAttentionConfig(num_heads=2, multi_query=True, pos_encoding=False),
+        mlp=MLPConfig(activation="gelu"),
+        num_blocks=2,
+        patch_mv_channels=PATCH_MV,
+    )
+    net.eval()
+
+    for _ in range(N_TESTS):
+        x_mv = torch.randn(BATCH, ITEMS, IN_MV, 8)
+        patch_mv = torch.randn(BATCH, ITEMS, PATCH_MV, 8)
+        w = random_spin3()
+
+        def act(mv):
+            return torch.stack(
+                [spin3_action(w, mv[..., c, :]) for c in range(mv.shape[-2])], dim=-2
+            )
+
+        out_mv, _ = net(x_mv, scalars=None, patch_mv=patch_mv)
+        path1_mv, _ = net(act(x_mv), scalars=None, patch_mv=act(patch_mv))
+        path2_mv = act(out_mv)
+
+        assert torch.allclose(path1_mv, path2_mv, atol=1e-4), \
+            f"GATr shared-embed patch equivariance failed: {(path1_mv - path2_mv).abs().max():.2e}"
+
+
+
+# ---------------------------------------------------------------------------
+# r9's cos_theta injector: dedicated slot-4 invariance check
+# ---------------------------------------------------------------------------
+
+def test_cos_theta_injector_slot_is_rotation_invariant():
+    """r9's cos_theta injector writes an invariant scalar into mv[:, 0, 4].
+
+    cos_theta = p_hat . n_hat_sub_highest is a genuine rotation invariant,
+    deliberately parked in a grade-2 slot of channel 0 because hybrid_r9's
+    channel-0 slots 4-6 are otherwise unused. The parametrized sweep above
+    only checks slots 0 and 7, so it never exercises this claim -- this test
+    closes that gap using the same rotation machinery as the sweep.
+
+    Channels 1-3 slots 4-6 are genuine bivector components (the wedge
+    p x n_hat) and must NOT be asserted invariant here -- they transform
+    under rotation like any other grade-2 slot.
+    """
+    layout, inject = VARIANTS["r9"]
+    fx = torch.load(f"{FIXTURE_DIR}/r9.pt", weights_only=False)
+    inputs = fx["inputs"]
+    aux = {k: v for k, v in inputs.items() if k not in ("fourmomenta", "ptr")}
+    cfg = _cfg(layout, inject)
+
+    plain = build_embedding(cfg, inputs["fourmomenta"], inputs["ptr"], aux)
+
+    for seed in (1, 2):
+        R = _random_rotation(seed)
+        rot_fm = inputs["fourmomenta"].clone()
+        rot_fm[:, 1:4] = rot_fm[:, 1:4] @ R.T
+        rot_aux = dict(aux)
+        rot_aux["axes"] = aux["axes"] @ R.T
+        if "p_lead" in aux:
+            pl = aux["p_lead"].clone()
+            pl[:, 1:4] = pl[:, 1:4] @ R.T
+            rot_aux["p_lead"] = pl
+
+        rotated = build_embedding(cfg, rot_fm, inputs["ptr"], rot_aux)
+
+        assert torch.allclose(
+            plain["mv"][:, 0, 4], rotated["mv"][:, 0, 4], atol=1e-4
+        ), "r9: cos_theta slot (channel 0, slot 4) is not rotation invariant"
+
+
+# ---------------------------------------------------------------------------
+# r7 GATr-net-level patch-pathway tests, ported verbatim from
+# r7-patch-injection (no plumbing change: these already exercised
+# su2eqnn.nets.gatr.GATr directly, not build_embedding, on that branch).
+# ---------------------------------------------------------------------------
+
+def test_gatr_patch_mv_none_matches_no_patch():
+    """GATr with patch_mv_channels=None is byte-identical to plain GATr."""
+    from su2eqnn.layers.attention.config import SelfAttentionConfig
+    from su2eqnn.layers.mlp.config import MLPConfig
+    from su2eqnn.nets.gatr import GATr
+
+    ITEMS = 5
+    IN_MV, OUT_MV, HIDDEN_MV = 1, 1, 4
+
+    torch.manual_seed(0)
+    net = GATr(
+        in_mv_channels=IN_MV,
+        out_mv_channels=OUT_MV,
+        hidden_mv_channels=HIDDEN_MV,
+        in_s_channels=None,
+        out_s_channels=None,
+        hidden_s_channels=None,
+        attention=SelfAttentionConfig(num_heads=2, multi_query=True, pos_encoding=False),
+        mlp=MLPConfig(activation="gelu"),
+        num_blocks=2,
+    )
+    net.eval()
+    assert net.patch_proj is None
+
+    x_mv = torch.randn(BATCH, ITEMS, IN_MV, 8)
+    out_mv_a, out_s_a = net(x_mv, scalars=None)
+    out_mv_b, out_s_b = net(x_mv, scalars=None, patch_mv=None)
+
+    assert torch.allclose(out_mv_a, out_mv_b, atol=1e-6)
+
+
+def test_gatr_patch_mv_changes_output():
+    """Nonzero patch_mv perturbs the output; patch_mv=None on a patch-enabled net matches no-patch forward."""
+    from su2eqnn.layers.attention.config import SelfAttentionConfig
+    from su2eqnn.layers.mlp.config import MLPConfig
+    from su2eqnn.nets.gatr import GATr
+
+    ITEMS = 5
+    IN_MV, OUT_MV, HIDDEN_MV, PATCH_MV = 1, 1, 4, 4
+
+    torch.manual_seed(0)
+    net = GATr(
+        in_mv_channels=IN_MV,
+        out_mv_channels=OUT_MV,
+        hidden_mv_channels=HIDDEN_MV,
+        in_s_channels=None,
+        out_s_channels=None,
+        hidden_s_channels=None,
+        attention=SelfAttentionConfig(num_heads=2, multi_query=True, pos_encoding=False),
+        mlp=MLPConfig(activation="gelu"),
+        num_blocks=2,
+        patch_mv_channels=PATCH_MV,
+    )
+    net.eval()
+    assert net.patch_proj is not None
+    assert len(net.patch_proj) == 2
+
+    x_mv = torch.randn(BATCH, ITEMS, IN_MV, 8)
+    patch_mv = torch.randn(BATCH, ITEMS, PATCH_MV, 8)
+
+    out_no_patch, _ = net(x_mv, scalars=None, patch_mv=None)
+    out_with_patch, _ = net(x_mv, scalars=None, patch_mv=patch_mv)
+
+    assert not torch.allclose(out_no_patch, out_with_patch, atol=1e-6), \
+        "nonzero patch_mv must change GATr output"
+
+
+def test_gatr_patch_proj_zero_preserved_with_nonzero_bias():
+    """patch_proj must preserve zero-patch-mv -> zero-injection even after training moves its bias.
+
+    Spurion tokens carry patch_mv == 0 exactly by design (see
+    experiments/top_tagging/embedding's patch layout). If patch_proj[i] had
+    a learnable grade-0 bias, that bias starts at zero but receives gradient
+    during training and becomes nonzero, which would inject spurious
+    grade-0 signal into spurion tokens (patch_proj[i](0) != 0). This test
+    simulates the post-training state by manually setting a nonzero bias on
+    patch_proj[0] and asserts patch_proj[i](0) stays exactly zero.
+    """
+    from su2eqnn.layers.attention.config import SelfAttentionConfig
+    from su2eqnn.layers.mlp.config import MLPConfig
+    from su2eqnn.nets.gatr import GATr
+
+    ITEMS = 5
+    IN_MV, OUT_MV, HIDDEN_MV, PATCH_MV = 1, 1, 4, 4
+
+    torch.manual_seed(0)
+    net = GATr(
+        in_mv_channels=IN_MV,
+        out_mv_channels=OUT_MV,
+        hidden_mv_channels=HIDDEN_MV,
+        in_s_channels=None,
+        out_s_channels=None,
+        hidden_s_channels=None,
+        attention=SelfAttentionConfig(num_heads=2, multi_query=True, pos_encoding=False),
+        mlp=MLPConfig(activation="gelu"),
+        num_blocks=2,
+        patch_mv_channels=PATCH_MV,
+    )
+    net.eval()
+    assert net.patch_proj is not None
+
+    layer0 = net.patch_proj[0]
+
+    # patch_proj must be constructed with bias=False: any grade-0 bias would
+    # drift away from zero during training (it receives gradient from the
+    # pooled classification logit) and then inject spurious grade-0 signal
+    # into spurion tokens, whose patch_mv is exactly zero by design.
+    assert layer0.bias is None, (
+        "patch_proj layers must be constructed with bias=False so that "
+        "patch_proj[i](zero patch_mv) stays exactly zero even after "
+        "training moves the bias away from its zero initialization"
+    )
+
+    # Simulate post-training state: if a bias parameter existed, force it
+    # nonzero (as it would be after gradient updates during training) and
+    # confirm the zero-preserving invariant still holds regardless.
+    if layer0.bias is not None:
+        with torch.no_grad():
+            layer0.bias.fill_(0.5)
+
+    zero_patch_mv = torch.zeros(BATCH, ITEMS, HIDDEN_MV, 8)
+    out_mv, _ = layer0(zero_patch_mv, scalars=None)
+
+    assert torch.equal(out_mv, torch.zeros_like(out_mv)), (
+        "patch_proj[i](zero patch_mv) must stay exactly zero, otherwise "
+        "spurion tokens (patch_mv == 0 by design) receive spurious grade-0 "
+        "signal"
+    )
+
+
+def test_gatr_patch_embed_zero_preserved_end_to_end():
+    """Zero patch_mv stays exactly zero through patch_embed AND patch_proj.
+
+    Confirms the shared embedding stage (EquiLinear(patch_mv_channels ->
+    hidden_mv_channels), bias=False) composes with the per-block projections
+    without breaking the zero-on-spurion invariant: spurion tokens carry
+    patch_mv == 0 exactly, and neither stage may inject spurious signal.
+    """
+    from su2eqnn.layers.attention.config import SelfAttentionConfig
+    from su2eqnn.layers.mlp.config import MLPConfig
+    from su2eqnn.nets.gatr import GATr
+
+    ITEMS = 5
+    IN_MV, OUT_MV, HIDDEN_MV, PATCH_MV = 1, 1, 6, 4
+
+    torch.manual_seed(0)
+    net = GATr(
+        in_mv_channels=IN_MV,
+        out_mv_channels=OUT_MV,
+        hidden_mv_channels=HIDDEN_MV,
+        in_s_channels=None,
+        out_s_channels=None,
+        hidden_s_channels=None,
+        attention=SelfAttentionConfig(num_heads=2, multi_query=True, pos_encoding=False),
+        mlp=MLPConfig(activation="gelu"),
+        num_blocks=2,
+        patch_mv_channels=PATCH_MV,
+    )
+    net.eval()
+    assert net.patch_embed is not None
+    assert net.patch_embed.bias is None, (
+        "patch_embed must be constructed with bias=False so that "
+        "patch_embed(zero patch_mv) stays exactly zero"
+    )
+
+    zero_patch_mv = torch.zeros(BATCH, ITEMS, PATCH_MV, 8)
+    patch_embedded, _ = net.patch_embed(zero_patch_mv)
+    assert torch.equal(patch_embedded, torch.zeros_like(patch_embedded))
+
+    out_mv, _ = net.patch_proj[0](patch_embedded)
+    assert torch.equal(out_mv, torch.zeros_like(out_mv)), (
+        "patch_proj[i](patch_embed(zero patch_mv)) must stay exactly zero, "
+        "otherwise spurion tokens receive spurious grade-0 signal"
+    )
+
 if __name__ == "__main__":
     test_spin3_inverse()
     test_spin3_norm_preservation()
@@ -645,4 +1225,15 @@ if __name__ == "__main__":
     test_gatr_block_equivariance()
     test_gatr_block_no_scalars_equivariance()
     test_gatr_equivariance()
+    test_build_embedding_patch_channels()
+    test_build_embedding_patch_equivariance()
+    test_gatr_patch_mv_equivariance()
+    test_gatr_patch_mv_equivariance_through_shared_embed()
+    test_ca_phase_injector_values_and_invariance()
+    test_cos_theta_injector_slot_is_rotation_invariant()
+    test_gatr_patch_mv_none_matches_no_patch()
+    test_gatr_patch_mv_changes_output()
+    test_gatr_patch_proj_zero_preserved_with_nonzero_bias()
+    test_gatr_patch_embed_zero_preserved_end_to_end()
     print("All equivariance tests passed.")
+
