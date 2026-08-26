@@ -137,7 +137,14 @@ the merged `data/toptagging_mini_aux.npz` produced by the command above.
   once found (see the baselines doc); it is not a unified-side bug, and
   the unified `single_channel` + explicit `inject: [lead_pseudoscalar]`
   path reproduces the branch's pseudoscalar-on behavior exactly once both
-  sides are told to use it.
+  sides are told to use it. Confirmed directly on 2026-08-26: re-running
+  variant a on its own axes-only dataset (`data/toptagging_mini_axes.npz`,
+  no `p_lead` key, so the implicit switch cannot fire) gives an exact
+  branch-vs-unified match on every metric line — 185,649 parameters,
+  identical val AUC at each step, `Test AUC=0.9314 | accuracy=0.8440`.
+  Logs: `docs/reference/logs/r8_arma_axesonly_{branch,unified}.log`. All
+  eight variants, nine configurations counting both r8 arms, reproduce
+  their source branch exactly.
 - **r5c and r5d's aux features (`phases`, `masses`) are the slow part of
   `precompute_features.py`.** `ca_hard_branch_phases` is a pure-Python,
   roughly-cubic-per-jet pairwise scan; over the full 24000-jet mini set

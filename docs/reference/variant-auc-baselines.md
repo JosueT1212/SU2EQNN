@@ -283,6 +283,44 @@ and still diverge end to end, distinct files from the variant-b logs
 equal the variant-b matched value — a coincidence of these particular
 numbers, not evidence that variant-a matched.
 
+### Confirmed 2026-08-26: variant a matches exactly on its own dataset
+
+The diagnosis above was verified directly rather than left as an inference.
+Both sides were re-run on `data/toptagging_mini_axes.npz` — the axes-only
+dataset r8 variant a is actually configured to use, which carries no
+`p_lead` key, so the branch's implicit switch cannot fire:
+
+- branch: `top_tagging_single_channel_axis_a` on `r8-single-channel-ablation`,
+  RNGs seeded externally (that branch has no `set_seed`), 1 epoch
+- unified: `top_tagging_single_channel_axis_b` with `data.inject=[]` and
+  `data.path=data/toptagging_mini_axes.npz`, `training.seed=0`, 1 epoch
+
+Result — **IDENTICAL**, every metric line:
+
+```
+Model parameters: 185,649        (both sides)
+Step 200 | val AUC=0.9076 acc=0.8280
+Step 400 | val AUC=0.9425 acc=0.8725
+Step 600 | val AUC=0.9415 acc=0.8825
+loss=0.4044
+Test AUC=0.9314 | accuracy=0.8440
+```
+
+Logs: `docs/reference/logs/r8_arma_axesonly_branch.log`,
+`docs/reference/logs/r8_arma_axesonly_unified.log`.
+
+So **all eight variants — nine configurations counting both r8 arms —
+reproduce their source branch exactly.** There is no remaining variant
+whose training path differs. The subset-dataset divergence recorded above
+was the harness comparing pseudoscalar-off against pseudoscalar-on, and is
+not a defect in the port.
+
+The underlying design difference is still real and still worth knowing: the
+branch infers the variant from which keys the dataset happens to contain,
+so a branch variant-a run on a `p_lead`-carrying dataset silently becomes
+variant b. The unified registry requires `data.inject` to say so. That makes
+the unified behavior the safer of the two for an ablation.
+
 ## Addendum (all items closed)
 
 - **r4 full-mini reproduction (vs. 0.9786): DONE.** `config/top_tagging_grade2_bivectors.yaml`,
