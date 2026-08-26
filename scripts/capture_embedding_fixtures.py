@@ -1,5 +1,16 @@
 """Capture a branch's embedding output as a regression fixture.
 
+PROVENANCE ONLY -- NOT RUNNABLE against the unified `main`/`unify-embeddings`
+tree. This script calls each branch's pre-refactor entry-point names (e.g.
+branch-specific `embed_tagging_data_*` functions) to capture the
+`tests/fixtures/*.pt` bit-exactness fixtures checked into this repo. It was
+run once, against the (now-archived) source branches, before this refactor
+landed, and the functions it imports no longer exist on this tree -- it
+cannot be re-run once the source branches are gone. The fixtures it produced
+remain the regression gate (`tests/test_embedding_equivalence.py`); this
+script is kept only for provenance. The usage below documents how it was
+originally invoked, for the historical record.
+
 Run from inside a worktree checked out to the variant's branch. `experiments/`
 is not part of the editable-installed package, so the repo root must be on
 PYTHONPATH explicitly:

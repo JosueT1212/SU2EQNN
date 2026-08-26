@@ -13,10 +13,14 @@ def _noop(mv, fourmomenta, ptr, particle_batch, aux, rescale):
 @pytest.fixture
 def fake_injectors(monkeypatch):
     table = {
-        "a_all": Injector("a_all", _noop, slot=7, channels=registry.AXIS_ALL),
-        "b_first4": Injector("b_first4", _noop, slot=7, channels=registry.AXIS_FIRST4),
-        "c_ch0": Injector("c_ch0", _noop, slot=7, channels=registry.CH0),
-        "d_slot0": Injector("d_slot0", _noop, slot=0, channels=registry.AXIS_ALL),
+        "a_all": Injector("a_all", _noop, slot=7, channels=registry.AXIS_ALL,
+                           requires_layout="multi_channel"),
+        "b_first4": Injector("b_first4", _noop, slot=7, channels=registry.AXIS_FIRST4,
+                              requires_layout="multi_channel"),
+        "c_ch0": Injector("c_ch0", _noop, slot=7, channels=registry.CH0,
+                           requires_layout="multi_channel"),
+        "d_slot0": Injector("d_slot0", _noop, slot=0, channels=registry.AXIS_ALL,
+                             requires_layout="multi_channel"),
     }
     monkeypatch.setattr(registry, "INJECTORS", table)
     return table

@@ -54,14 +54,16 @@ checkpoint is written.
 
 ## Running a variant on the unified embedding registry
 
-As of the `unify-embeddings` work, every branch listed below (and its old
-per-branch precompute/config dance) has been ported onto `main` as a single
+The `unify-embeddings` branch ports every branch listed below (and its old
+per-branch precompute/config dance) onto a single
 `experiments.top_tagging.embedding` registry, selected per-config by
 `data.embedding` (channel layout) and `data.inject` (which physics
-observable, if any, is written into which slot). The old branches are
-archived, not deleted (see `docs/reference/variant-auc-baselines.md` for
-Task 12's reproduction results); you no longer need to check one out to run
-its experiment.
+observable, if any, is written into which slot). This work is not yet on
+`main` — it lives on `unify-embeddings`, unmerged. Once merged, the old
+branches are meant to be archived, not deleted (see
+`docs/reference/variant-auc-baselines.md` for Task 12's reproduction
+results); from `unify-embeddings`, you no longer need to check one out to
+run its experiment.
 
 1. Precompute whichever aux features your chosen config needs (`axes`,
    `masses`, `phases`, `leading`) with the unified script:

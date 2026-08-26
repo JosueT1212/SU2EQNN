@@ -630,6 +630,13 @@ def test_gatr_equivariance():
 # as vectors, grade-2 slots as bivectors, and grade-0/grade-3 slots are
 # invariant.
 #
+# Deliberate exception: hybrid_r9 + cos_theta. r9's experimental hypothesis
+# is to write a rotation-invariant scalar (cos_theta) into channel 0's e12
+# slot -- a grade-2 slot that would otherwise be expected to transform as a
+# bivector. This is a faithful port of r9's design, not a bug; see the
+# hybrid_r9 docstring in layouts.py and the cos_theta docstring in
+# injectors.py for why.
+#
 # Caveat: the kT subjet axes and the C/A tree are computed in the beam frame,
 # so *precomputed* aux is only equivariant under azimuthal rotations in
 # production. This test rotates the aux tensors explicitly, which isolates

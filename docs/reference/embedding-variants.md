@@ -56,16 +56,19 @@ the merged `data/toptagging_mini_aux.npz` produced by the command above.
 
 ## Notes
 
-- **`r5c-pseudoscalar-phase` has a committed AUC baseline that has not yet
-  been reproduced.** `outputs/pseudoscalar_phase_mini/experiment.log` on
-  that branch is tracked in git history and ends `Test AUC=0.9770 |
-  accuracy=0.9260` (30 epochs, `data.path=data/toptagging_mini_axes_phases.npz`).
-  This is a real, verifiable baseline — stronger than r4's untracked 0.9786 —
-  and Task 12's paired-run table only exercises r5c with a 1-epoch,
-  2000-jet subset (0.7519 vs 0.7603), which is not comparable to 0.9770.
-  Treat r5c the same as r4: not yet safe to archive/delete against a
-  reproduced number. See `docs/reference/variant-auc-baselines.md`'s
-  addendum for the full 30-epoch reproduction result once it exists.
+- **`r5c-pseudoscalar-phase`'s committed AUC baseline has been reproduced.**
+  `outputs/pseudoscalar_phase_mini/experiment.log` on that branch is tracked
+  in git history and ends `Test AUC=0.9770 | accuracy=0.9260` (30 epochs,
+  `data.path=data/toptagging_mini_axes_phases.npz`). Task 12's paired-run
+  table only exercises r5c with a 1-epoch, 2000-jet subset (0.7519 vs
+  0.7603), which is not comparable to 0.9770 — but a separate full
+  30-epoch reproduction run on the unified code, against a regenerated
+  `data/toptagging_mini_axes_phases.npz`, produced **Test AUC = 0.9757,
+  accuracy = 0.9200** (log: `docs/reference/logs/unified_r5c_full.log`), a
+  -0.0013 AUC difference from the committed 0.9770/0.9260. Both of this
+  project's committed baselines (r4 and r5c) are now reproduced; see
+  `docs/reference/variant-auc-baselines.md`'s "Task 12 verification"
+  section and addendum for the full numbers and methodology.
 
 - **`scripts/capture_embedding_fixtures.py` is a historical artifact.** It
   calls each branch's pre-refactor entry-point names (e.g. branch-specific
@@ -105,9 +108,8 @@ the merged `data/toptagging_mini_aux.npz` produced by the command above.
   step's AUC/accuracy, epoch loss, and test AUC/accuracy — not just the
   final number), with r9 already verified via true internal seeding on
   both sides. Full methodology and every log line compared:
-  `.superpowers/sdd/2026-08-25-unified-embedding-registry/parity-report.md`
-  and `docs/reference/variant-auc-baselines.md`'s "Training-path parity
-  sweep" section. This is direct verification of the training path itself,
+  `docs/reference/parity-report.md` and `docs/reference/variant-auc-baselines.md`'s
+  "Training-path parity sweep" section. This is direct verification of the training path itself,
   not an inference from matching embeddings plus a shared `experiment.py`.
 - **`config/top_tagging_single_channel_axis.yaml` (r8, variant a) cannot be
   run as checked in, in this environment.** It needs `data/toptagging_full_axes.npz`

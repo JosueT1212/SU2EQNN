@@ -8,7 +8,7 @@ bodies are copied verbatim from the branch that introduced them.
 
 import torch
 
-from experiments.top_tagging.embedding.core import UNITS  # noqa: F401  (used by later injectors)
+from experiments.top_tagging.embedding.core import UNITS
 
 
 def subjet_mass(mv, fourmomenta, ptr, particle_batch, aux, rescale) -> None:

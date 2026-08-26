@@ -83,8 +83,7 @@ since capture.
 
 ## Task 12 verification (2026-08-25)
 
-Task 12's acceptance was rescoped (recorded in the plan ledger,
-`.superpowers/sdd/2026-08-25-unified-embedding-registry/progress.md`): only
+Task 12's acceptance was rescoped: only
 `r4` has a recorded number to reproduce, so that comparison was run in full;
 the other seven variants were checked with a **paired short run** (same
 config, same step budget, unified vs. that variant's own source branch in a
@@ -96,7 +95,7 @@ Unified code, `config/top_tagging_grade2_bivectors.yaml` (30 epochs,
 `training.seed: 0` — newly added; the original branch run that produced
 0.9786 had no seed set at all), run to completion:
 
-**Test AUC = 0.9781, accuracy = 0.9250** (log: `outputs/unified_top_tagging_grade2_bivectors_full.log`),
+**Test AUC = 0.9781, accuracy = 0.9250** (log: `docs/reference/logs/unified_top_tagging_grade2_bivectors_full.log`),
 vs. the untracked 0.9786 / 0.9245 noted above — a difference of -0.0005 AUC.
 This is a fresh, seeded, verifiable run against the archived branch tip's
 config, not a repeat of the untracked number. The 0.0005 gap is not being
@@ -123,7 +122,7 @@ script's `_compute_phases` body was byte-verified against branch
 `r5c-pseudoscalar-phase`'s own `precompute_phases.py` back in Task 2, which
 is why this regenerated aux file is trustworthy rather than a fresh,
 unverified reimplementation), `data.path` passed as a runtime override, not
-committed to the config. Log: `outputs/unified_r5c_full.log`.
+committed to the config. Log: `docs/reference/logs/unified_r5c_full.log`.
 
 **Test AUC = 0.9757, accuracy = 0.9200**, vs. the committed 0.9770 / 0.9260
 — a difference of -0.0013 AUC. Reported as a number, not graded pass/fail:
@@ -158,7 +157,7 @@ one-sided seeding, not evidence about the training path.
 
 | variant | unified Test AUC | branch Test AUC | seeded both sides? | notes |
 |---|---|---|---|---|
-| r4 | 0.9637 | 0.9629 | unified only | 1 epoch, mini; re-derived, log at `outputs/pair_branch_r4.log` |
+| r4 | 0.9637 | 0.9629 | unified only | 1 epoch, mini; re-derived, log at `docs/reference/logs/pair_branch_r4.log` |
 | r5a | 0.9594 | 0.9622 | unified only | 1 epoch, mini |
 | r5b | 0.9658 | 0.9646 | unified only | 1 epoch, mini |
 | r5c | 0.7519 | 0.7603 | unified only | 1 epoch, **subset** (2000/500/500 jets) — **not comparable to the committed 0.9770 baseline; see the full 30-epoch reproduction (0.9757) in the callout above and the addendum below** |
@@ -203,7 +202,7 @@ either side consumes RNG state before that point (verified: no
 every branch's `main()` goes straight from `@hydra.main` into
 `run_experiment` with no seeding in between). Full methodology, commands,
 and the complete per-step log comparison are in
-`.superpowers/sdd/2026-08-25-unified-embedding-registry/parity-report.md`.
+`docs/reference/parity-report.md`.
 
 **Result: seven of eight variants (r4, r5a, r5b, r5c, r5d, r7, and r8
 variant-b) are bit-for-bit IDENTICAL between unified and branch** — not
@@ -276,10 +275,10 @@ infers behavior from data presence should expect this class of surprise.
 **Note, to avoid a false read:** the variant-b re-run is a *different*
 pairing (both sides told to inject `lead_pseudoscalar`), not a re-run of
 the variant-a pairing — it does not "fix" or supersede the variant-a
-divergence. The variant-a logs (`outputs/parity_unified_r8.log`, Test
-AUC=0.7828; `outputs/parity_branch_r8.log`, Test AUC=0.7761) are untouched
+divergence. The variant-a logs (`docs/reference/logs/parity_unified_r8.log`, Test
+AUC=0.7828; `docs/reference/logs/parity_branch_r8.log`, Test AUC=0.7761) are untouched
 and still diverge end to end, distinct files from the variant-b logs
-(`outputs/parity_unified_r8b.log` / `outputs/parity_branch_r8b.log`, both
+(`docs/reference/logs/parity_unified_r8b.log` / `docs/reference/logs/parity_branch_r8b.log`, both
 0.7761/0.6460). That branch-side variant-a Test AUC (0.7761) happens to
 equal the variant-b matched value — a coincidence of these particular
 numbers, not evidence that variant-a matched.
@@ -288,7 +287,7 @@ numbers, not evidence that variant-a matched.
 
 - **r4 full-mini reproduction (vs. 0.9786): DONE.** `config/top_tagging_grade2_bivectors.yaml`,
   30 epochs, `training.seed: 0`, unified code. Log:
-  `outputs/unified_top_tagging_grade2_bivectors_full.log`. **Test AUC=0.9781,
+  `docs/reference/logs/unified_top_tagging_grade2_bivectors_full.log`. **Test AUC=0.9781,
   accuracy=0.9250** vs. the untracked 0.9786/0.9245 — a -0.0005 AUC
   difference, reported plainly and not graded pass/fail.
 - **r5c full-mini reproduction (vs. 0.9770): DONE.** `config/top_tagging_pseudoscalar_phase.yaml`,
@@ -297,7 +296,7 @@ numbers, not evidence that variant-a matched.
   regenerating script's `_compute_phases` body was byte-verified against
   branch `r5c-pseudoscalar-phase`'s own `precompute_phases.py` in Task 2,
   so this regenerated aux is trustworthy) passed as a runtime override, not
-  committed to the config. Log: `outputs/unified_r5c_full.log`. **Test
+  committed to the config. Log: `docs/reference/logs/unified_r5c_full.log`. **Test
   AUC=0.9757, accuracy=0.9200** vs. the committed 0.9770/0.9260 — a
   -0.0013 AUC difference, reported plainly and not graded pass/fail (the
   committed 0.9770 run was itself unseeded).
@@ -306,5 +305,5 @@ numbers, not evidence that variant-a matched.
   re-run of the same pairing (`r4-multiaxis-bivector`,
   `config/top_tagging_grade2_bivectors.yaml`, 1 epoch, `+training.seed=0`,
   in a throwaway worktree removed only after the log was copied out) gave
-  **Test AUC=0.9629, accuracy=0.8935**, retained at `outputs/pair_branch_r4.log`.
+  **Test AUC=0.9629, accuracy=0.8935**, retained at `docs/reference/logs/pair_branch_r4.log`.
   The table above now shows 0.9629 as r4's branch-side number.

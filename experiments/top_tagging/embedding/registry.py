@@ -5,7 +5,7 @@ triad injector legitimately writes slot 7 on channel 1 and on channels 2..K,
 and must not be reported as colliding with itself.
 """
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Callable, Optional, Tuple
 
 from experiments.top_tagging.embedding import injectors, layouts
@@ -28,8 +28,8 @@ class Injector:
     fn: Callable
     slot: int
     channels: str
+    requires_layout: str
     requires_aux: Tuple[str, ...] = ()
-    requires_layout: Optional[str] = None
     requires_k: Optional[int] = None
 
 
@@ -113,7 +113,7 @@ def resolve(layout_name: str, inject_names):
                 f"unknown injector {name!r}; known: {sorted(INJECTORS)}"
             )
         inj = INJECTORS[name]
-        if inj.requires_layout is not None and inj.requires_layout != layout_name:
+        if inj.requires_layout != layout_name:
             raise ValueError(
                 f"injector {name!r} requires layout {inj.requires_layout!r}, "
                 f"got {layout_name!r}"

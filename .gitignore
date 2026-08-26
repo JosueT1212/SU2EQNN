@@ -14,3 +14,4 @@ venv/
 runs/
 *.hdf5
 *.npz
+.worktrees/

@@ -1,0 +1,10 @@
+[2026-08-25 15:45:22,230][__main__][INFO] - Using device: cpu
+[2026-08-25 15:45:22,230][__main__][INFO] - Loading datasets...
+[2026-08-25 15:45:22,756][__main__][INFO] - Model parameters: 186,161
+[2026-08-25 15:46:13,965][__main__][INFO] - Step 200 | val AUC=0.9344 acc=0.8675
+[2026-08-25 15:46:13,969][__main__][INFO] - Saved best model (AUC=0.9344) to checkpoints/_pair_branch_r4_relaunch.pt
+[2026-08-25 15:47:06,966][__main__][INFO] - Step 400 | val AUC=0.9560 acc=0.8880
+[2026-08-25 15:47:06,969][__main__][INFO] - Saved best model (AUC=0.9560) to checkpoints/_pair_branch_r4_relaunch.pt
+[2026-08-25 15:48:00,678][__main__][INFO] - Step 600 | val AUC=0.9555 acc=0.8885
+[2026-08-25 15:48:06,572][__main__][INFO] - Epoch 1/1 | loss=0.3475 | 163.8s
+[2026-08-25 15:48:14,364][__main__][INFO] - Test AUC=0.9629 | accuracy=0.8935
