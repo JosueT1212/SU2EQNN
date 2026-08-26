@@ -14,7 +14,8 @@ from experiments.top_tagging.embedding.core import (
 
 
 def multi_channel(fourmomenta, ptr, aux, two_beams=True, rescale=True) -> dict:
-    """R4/R5 layout: channel 0 kinematics, channels 1..K the wedge p⃗ ∧ n̂_k.
+    """Multi-channel layout: channel 0 kinematics, channels 1..K the wedge
+    p⃗ ∧ n̂_k.
 
     Requires aux["axes"] of shape (batchsize, K, 3). Without it the layout
     degenerates to a single kinematic channel (the R1 baseline).
@@ -49,7 +50,7 @@ def multi_channel(fourmomenta, ptr, aux, two_beams=True, rescale=True) -> dict:
 
 
 def single_channel(fourmomenta, ptr, aux, two_beams=True, rescale=True):
-    """r8 layout: everything in channel 0.
+    """Single-channel layout: everything in channel 0.
 
     Slots 0-3 hold (E, px, py, pz); slots 4-6 hold p⃗ ∧ n̂_jet, the K=1
     restriction of the multi_channel wedge; slot 7 is left for an injector.
@@ -79,7 +80,7 @@ def single_channel(fourmomenta, ptr, aux, two_beams=True, rescale=True):
 
 
 def patch(fourmomenta, ptr, aux, two_beams=True, rescale=True):
-    """r7 layout: plain kinematic mv plus a separate patch_mv wedge stream.
+    """Patch layout: plain kinematic mv plus a separate patch_mv wedge stream.
 
     Unlike multi_channel, the wedges are not baked into input channels; they
     are returned separately for per-block residual re-injection into GATr's
@@ -109,8 +110,9 @@ def patch(fourmomenta, ptr, aux, two_beams=True, rescale=True):
     return mv, {"_patch_particles": patch_mv}
 
 
-def hybrid_r9(fourmomenta, ptr, aux, two_beams=True, rescale=True):
-    """r9 layout: 4 channels, subjet-highest axis reserved for the scalar.
+def invariant_subjet_axis(fourmomenta, ptr, aux, two_beams=True, rescale=True):
+    """Invariant-subjet-axis layout: 4 channels, subjet-highest axis reserved
+    for the scalar.
 
     Channel 0 holds kinematics (slot 4 is left for the cos_theta injector);
     channels 1-3 hold p⃗ ∧ n̂ for the jet axis, and the two remaining subjet
@@ -119,7 +121,7 @@ def hybrid_r9(fourmomenta, ptr, aux, two_beams=True, rescale=True):
     """
     axes = aux.get("axes")
     if axes is None:
-        raise ValueError("hybrid_r9 layout requires aux['axes']")
+        raise ValueError("invariant_subjet_axis layout requires aux['axes']")
     n_channels = 4
 
     if rescale:

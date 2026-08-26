@@ -630,11 +630,12 @@ def test_gatr_equivariance():
 # as vectors, grade-2 slots as bivectors, and grade-0/grade-3 slots are
 # invariant.
 #
-# Deliberate exception: hybrid_r9 + cos_theta. r9's experimental hypothesis
-# is to write a rotation-invariant scalar (cos_theta) into channel 0's e12
+# Deliberate exception: invariant_subjet_axis + cos_theta. The
+# invariant-subjet-axis hypothesis is to write a rotation-invariant scalar
+# (cos_theta) into channel 0's e12
 # slot -- a grade-2 slot that would otherwise be expected to transform as a
-# bivector. This is a faithful port of r9's design, not a bug; see the
-# hybrid_r9 docstring in layouts.py and the cos_theta docstring in
+# bivector. This is a faithful port of that design, not a bug; see the
+# invariant_subjet_axis docstring in layouts.py and the cos_theta docstring in
 # injectors.py for why.
 #
 # Caveat: the kT subjet axes and the C/A tree are computed in the beam frame,
@@ -662,18 +663,23 @@ def _random_rotation(seed):
 
 
 # Variants whose slot 7 is identically zero in the plain (unrotated)
-# embedding -- no injector for that variant writes it (r4, r7 have no
-# injector at all; r5d's subjet_mass writes slot 0, not 7; r9's cos_theta
-# writes slot 4, not 7). For these four, the slot-7 half of the invariance
+# embedding -- no injector for that variant writes it (multi_axis_bivectors
+# and bivector_patch have no injector at all; the subjet_mass variant's
+# subjet_mass injector writes slot 0, not 7; the invariant_subjet_axis
+# variant's cos_theta writes slot 4, not 7). For these four, the slot-7 half of the invariance
 # check below is a structural 0 == 0: it holds for any implementation and
 # provides no coverage of any injector. It is kept anyway (harmless, matches
 # the brief's literal sweep, and still catches an implementation that
 # accidentally starts writing slot 7), but the test asserts explicitly that
 # each such case really is the trivial kind, so a reader -- or a future
 # change to an injector -- can tell which of the 16 cases have teeth.
-# r5a, r5b, r5c and r8 all write nonzero content into slot 7 and are NOT
-# in this set; their slot-7 checks are the real thing.
-_SLOT7_IS_ZERO = {"r4", "r5d", "r7", "r9"}
+# triad_handedness, local_handedness, ca_phase and
+# single_channel_pseudoscalar all write nonzero content into slot 7 and are
+# NOT in this set; their slot-7 checks are the real thing.
+_SLOT7_IS_ZERO = {
+    "multi_axis_bivectors", "subjet_mass", "bivector_patch",
+    "invariant_subjet_axis",
+}
 
 
 @pytest.mark.parametrize("variant", sorted(VARIANTS))
@@ -727,9 +733,9 @@ def test_scalar_slots_are_rotation_invariant(variant, seed):
 
 
 def test_ca_phase_injector_values_and_invariance():
-    """ca_phase (r5c) writes precomputed C/A splitting-plane phases into
+    """ca_phase writes precomputed C/A splitting-plane phases into
     slot 7 of channels 1-4. This test exists because the sweep case above
-    for r5c is tautological: ca_phase's input (aux["phases"]) is a
+    for the ca_phase variant is tautological: ca_phase's input (aux["phases"]) is a
     precomputed pseudoscalar with no rotation law, so it is correctly never
     rotated -- but that means the "rotated" call recomputes a bit-identical
     tensor and the slot-7 invariance assertion above is 0 == 0 by
@@ -745,8 +751,8 @@ def test_ca_phase_injector_values_and_invariance():
     """
     from experiments.top_tagging.embedding import get_batch_from_ptr
 
-    layout, inject = VARIANTS["r5c"]
-    fx = torch.load(f"{FIXTURE_DIR}/r5c.pt", weights_only=False)
+    layout, inject = VARIANTS["ca_phase"]
+    fx = torch.load(f"{FIXTURE_DIR}/ca_phase.pt", weights_only=False)
     inputs = fx["inputs"]
     aux = {k: v for k, v in inputs.items() if k not in ("fourmomenta", "ptr")}
     cfg = _cfg(layout, inject)
@@ -788,14 +794,14 @@ def test_ca_phase_injector_values_and_invariance():
 
 
 # ---------------------------------------------------------------------------
-# Patch pathway (r7): equivariance tests ported from r7-patch-injection,
-# which were outside the checkout list for the earlier porting task and were
-# never carried over. The embedding-level pair below is adapted to the
-# current API: build_embedding(cfg, ...) with embedding="patch", and
-# patch_mv as a returned key (r7's branch had a standalone
+# Patch pathway (bivector_patch): equivariance tests ported from the
+# r7-patch-injection branch, which were outside the checkout list for the
+# earlier porting task and were never carried over. The embedding-level pair
+# below is adapted to the current API: build_embedding(cfg, ...) with embedding="patch", and
+# patch_mv as a returned key (that branch had a standalone
 # embed_tagging_data_bivector_patch function that returned patch_mv
 # directly). The GATr-net-level pair is ported verbatim: su2eqnn.nets.gatr
-# already exposes patch_mv_channels/patch_mv unchanged from r7.
+# already exposes patch_mv_channels/patch_mv unchanged from that branch.
 # ---------------------------------------------------------------------------
 
 def test_build_embedding_patch_channels():
@@ -975,14 +981,15 @@ def test_gatr_patch_mv_equivariance_through_shared_embed():
 
 
 # ---------------------------------------------------------------------------
-# r9's cos_theta injector: dedicated slot-4 invariance check
+# cos_theta injector: dedicated slot-4 invariance check
 # ---------------------------------------------------------------------------
 
 def test_cos_theta_injector_slot_is_rotation_invariant():
-    """r9's cos_theta injector writes an invariant scalar into mv[:, 0, 4].
+    """The cos_theta injector writes an invariant scalar into mv[:, 0, 4].
 
     cos_theta = p_hat . n_hat_sub_highest is a genuine rotation invariant,
-    deliberately parked in a grade-2 slot of channel 0 because hybrid_r9's
+    deliberately parked in a grade-2 slot of channel 0 because the
+    invariant_subjet_axis layout's
     channel-0 slots 4-6 are otherwise unused. The parametrized sweep above
     only checks slots 0 and 7, so it never exercises this claim -- this test
     closes that gap using the same rotation machinery as the sweep.
@@ -991,8 +998,8 @@ def test_cos_theta_injector_slot_is_rotation_invariant():
     p x n_hat) and must NOT be asserted invariant here -- they transform
     under rotation like any other grade-2 slot.
     """
-    layout, inject = VARIANTS["r9"]
-    fx = torch.load(f"{FIXTURE_DIR}/r9.pt", weights_only=False)
+    layout, inject = VARIANTS["invariant_subjet_axis"]
+    fx = torch.load(f"{FIXTURE_DIR}/invariant_subjet_axis.pt", weights_only=False)
     inputs = fx["inputs"]
     aux = {k: v for k, v in inputs.items() if k not in ("fourmomenta", "ptr")}
     cfg = _cfg(layout, inject)
@@ -1014,12 +1021,15 @@ def test_cos_theta_injector_slot_is_rotation_invariant():
 
         assert torch.allclose(
             plain["mv"][:, 0, 4], rotated["mv"][:, 0, 4], atol=1e-4
-        ), "r9: cos_theta slot (channel 0, slot 4) is not rotation invariant"
+        ), (
+            "invariant_subjet_axis: cos_theta slot (channel 0, slot 4) is "
+            "not rotation invariant"
+        )
 
 
 # ---------------------------------------------------------------------------
-# r7 GATr-net-level patch-pathway tests, ported verbatim from
-# r7-patch-injection (no plumbing change: these already exercised
+# bivector_patch GATr-net-level patch-pathway tests, ported verbatim from
+# the r7-patch-injection branch (no plumbing change: these already exercised
 # su2eqnn.nets.gatr.GATr directly, not build_embedding, on that branch).
 # ---------------------------------------------------------------------------
 

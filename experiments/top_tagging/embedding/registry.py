@@ -1,6 +1,6 @@
 """Config name -> (layout, injectors), with build-time validation.
 
-Collision detection keys on (channel range, slot), not on slot alone: r5a's
+Collision detection keys on (channel range, slot), not on slot alone: the
 triad injector legitimately writes slot 7 on channel 1 and on channels 2..K,
 and must not be reported as colliding with itself.
 """
@@ -36,7 +36,7 @@ class Injector:
 LAYOUTS = {
     "multi_channel": layouts.multi_channel,
     "single_channel": layouts.single_channel,
-    "hybrid_r9": layouts.hybrid_r9,
+    "invariant_subjet_axis": layouts.invariant_subjet_axis,
     "patch": layouts.patch,
 }
 
@@ -90,7 +90,7 @@ INJECTORS = {
         slot=4,
         channels=CH0,
         requires_aux=("axes",),
-        requires_layout="hybrid_r9",
+        requires_layout="invariant_subjet_axis",
         requires_k=4,
     ),
 }

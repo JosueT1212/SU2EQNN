@@ -12,7 +12,7 @@ from experiments.top_tagging.embedding.core import UNITS
 
 
 def subjet_mass(mv, fourmomenta, ptr, particle_batch, aux, rescale) -> None:
-    """Broadcast [m_jet, m_s1..s3] into slot 0 of channels 1-4 (r5d).
+    """Broadcast [m_jet, m_s1..s3] into slot 0 of channels 1-4.
 
     Masses arrive in GeV and are divided by UNITS when rescale is set, the
     same convention as the momenta in channel 0.
@@ -24,7 +24,7 @@ def subjet_mass(mv, fourmomenta, ptr, particle_batch, aux, rescale) -> None:
 
 
 def triad_handedness(mv, fourmomenta, ptr, particle_batch, aux, rescale) -> None:
-    """Signed subjet triads into slot 7 (r5a).
+    """Signed subjet triads into slot 7.
 
     Channel 1 carries the jet-level triad handedness broadcast to every
     particle; channels 2..K carry per-particle signed volumes built from the
@@ -51,7 +51,7 @@ def triad_handedness(mv, fourmomenta, ptr, particle_batch, aux, rescale) -> None
 
 
 def local_handedness(mv, fourmomenta, ptr, particle_batch, aux, rescale) -> None:
-    """Efremov-style local handedness into slot 7 of every axis channel (r5b).
+    """Efremov-style local handedness into slot 7 of every axis channel.
 
     v_i = normalized sum_{j!=i} (|p_j|/max(|p_i-p_j|,1e-3)) p_j within the
     jet; chi_i^(k) = n_k . (p_i x v_i). Neighborhood average (not
@@ -94,7 +94,7 @@ def local_handedness(mv, fourmomenta, ptr, particle_batch, aux, rescale) -> None
 
 
 def ca_phase(mv, fourmomenta, ptr, particle_batch, aux, rescale) -> None:
-    """C-A splitting-plane phases into slot 7 of channels 1-4 (r5c).
+    """C-A splitting-plane phases into slot 7 of channels 1-4.
 
     sin(dpsi) between successive splitting planes on the hard branch, broadcast
     per jet. O(1) by construction, so never rescaled.
@@ -104,7 +104,7 @@ def ca_phase(mv, fourmomenta, ptr, particle_batch, aux, rescale) -> None:
 
 
 def lead_pseudoscalar(mv, fourmomenta, ptr, particle_batch, aux, rescale) -> None:
-    """Pseudoscalar volume I = p⃗ · (n̂_jet × p̂_lead) into slot 7 of channel 0 (r8).
+    """Pseudoscalar volume I = p⃗ · (n̂_jet × p̂_lead) into slot 7 of channel 0.
 
     p_lead is the highest-pT constituent's 4-momentum; only its direction is
     used, so the value is scale-free apart from p⃗ itself.
@@ -121,7 +121,7 @@ def lead_pseudoscalar(mv, fourmomenta, ptr, particle_batch, aux, rescale) -> Non
 
 
 def cos_theta(mv, fourmomenta, ptr, particle_batch, aux, rescale) -> None:
-    """Invariant cos(theta) against the highest-pT subjet, into ch0 slot 4 (r9).
+    """Invariant cos(theta) against the highest-pT subjet, into ch0 slot 4.
 
     cos_theta = p̂ · n̂_sub_highest, where n̂_sub_highest is axes[:, 1]. Scale
     free by construction: the momentum is normalized before the dot product,

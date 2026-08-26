@@ -15,14 +15,14 @@ FIXTURE_DIR = "tests/fixtures"
 
 # variant -> (layout name, injector list)
 VARIANTS = {
-    "r4": ("multi_channel", []),
-    "r5d": ("multi_channel", ["subjet_mass"]),
-    "r5a": ("multi_channel", ["triad_handedness"]),
-    "r5b": ("multi_channel", ["local_handedness"]),
-    "r5c": ("multi_channel", ["ca_phase"]),
-    "r8": ("single_channel", ["lead_pseudoscalar"]),
-    "r9": ("hybrid_r9", ["cos_theta"]),
-    "r7": ("patch", []),
+    "multi_axis_bivectors": ("multi_channel", []),
+    "subjet_mass": ("multi_channel", ["subjet_mass"]),
+    "triad_handedness": ("multi_channel", ["triad_handedness"]),
+    "local_handedness": ("multi_channel", ["local_handedness"]),
+    "ca_phase": ("multi_channel", ["ca_phase"]),
+    "single_channel_pseudoscalar": ("single_channel", ["lead_pseudoscalar"]),
+    "invariant_subjet_axis": ("invariant_subjet_axis", ["cos_theta"]),
+    "bivector_patch": ("patch", []),
 }
 
 
@@ -51,7 +51,7 @@ def test_matches_branch_fixture(variant):
 
 
 def test_single_channel_without_injector_leaves_slot7_zero():
-    fx = torch.load(f"{FIXTURE_DIR}/r8.pt", weights_only=False)
+    fx = torch.load(f"{FIXTURE_DIR}/single_channel_pseudoscalar.pt", weights_only=False)
     inputs = fx["inputs"]
     aux = {k: v for k, v in inputs.items() if k not in ("fourmomenta", "ptr")}
 
@@ -64,13 +64,13 @@ def test_single_channel_without_injector_leaves_slot7_zero():
     assert torch.equal(got["mv"][..., :7], fx["outputs"]["mv"][..., :7])
 
 
-def test_hybrid_r9_without_cos_theta_leaves_ch0_slot4_zero():
-    fx = torch.load(f"{FIXTURE_DIR}/r9.pt", weights_only=False)
+def test_invariant_subjet_axis_without_cos_theta_leaves_ch0_slot4_zero():
+    fx = torch.load(f"{FIXTURE_DIR}/invariant_subjet_axis.pt", weights_only=False)
     inputs = fx["inputs"]
     aux = {k: v for k, v in inputs.items() if k not in ("fourmomenta", "ptr")}
 
     got = build_embedding(
-        _cfg("hybrid_r9", []), inputs["fourmomenta"], inputs["ptr"], aux
+        _cfg("invariant_subjet_axis", []), inputs["fourmomenta"], inputs["ptr"], aux
     )
     assert torch.equal(got["mv"][:, 0, 4], torch.zeros_like(got["mv"][:, 0, 4]))
     assert torch.equal(got["mv"][:, 1:], fx["outputs"]["mv"][:, 1:])

@@ -23,7 +23,8 @@ worktree at the same branch tip:
 
     git worktree add --force .worktrees/r5d r5d-subjet-mass
 
-Writes <out_dir>/<variant>.pt containing both the inputs the branch consumed
+Writes <out_dir>/<fixture name>.pt (see FIXTURE_NAMES) containing both the
+inputs the branch consumed
 and the outputs it produced, so the unified implementation can be checked
 against it without re-deriving aux tensors.
 """
@@ -65,6 +66,22 @@ def make_inputs():
     }
 
 
+# Branch shorthand (the argument this script takes, matching the old branch
+# names it checks out) -> the fixture filename the tests load. The dispatch
+# below deliberately keeps the branch shorthand: it names real git branches and
+# their old embedding APIs, which no rename can change.
+FIXTURE_NAMES = {
+    "r4": "multi_axis_bivectors",
+    "r5a": "triad_handedness",
+    "r5b": "local_handedness",
+    "r5c": "ca_phase",
+    "r5d": "subjet_mass",
+    "r7": "bivector_patch",
+    "r8": "single_channel_pseudoscalar",
+    "r9": "invariant_subjet_axis",
+}
+
+
 def call_branch(variant, fourmomenta, ptr, aux):
     """Invoke the branch's embedding entry point for this variant."""
     if variant in ("r4", "r5a", "r5b"):
@@ -100,7 +117,7 @@ def main(variant, out_dir):
         "inputs": {"fourmomenta": fourmomenta, "ptr": ptr, **aux},
         "outputs": {k: v for k, v in out.items()},
     }
-    path = f"{out_dir}/{variant}.pt"
+    path = f"{out_dir}/{FIXTURE_NAMES[variant]}.pt"
     torch.save(payload, path)
     shapes = {k: tuple(v.shape) for k, v in payload["outputs"].items()}
     print(f"wrote {path}  outputs={shapes}")
