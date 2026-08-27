@@ -72,7 +72,10 @@ def build_model(cfg) -> TopTaggingWrapper:
         in_s_channels=None,
         out_s_channels=None,
         hidden_s_channels=None,
-        attention=SelfAttentionConfig(num_heads=cfg.model.num_heads),
+        attention=SelfAttentionConfig(
+            num_heads=cfg.model.num_heads,
+            head_scale=bool(getattr(cfg.model, "head_scale", False)),
+        ),
         mlp=MLPConfig(activation="gelu"),
         num_blocks=cfg.model.num_blocks,
         patch_mv_channels=patch_mv_channels,
@@ -154,6 +157,19 @@ def run_experiment(cfg: DictConfig) -> None:
             f"Using CosineAnnealingWarmRestarts: T_0={cfg.training.scheduler_t0_steps} "
             f"steps, eta_min={cfg.training.eta_min}"
         )
+    elif getattr(cfg.training, "scheduler", None) == "cosine":
+        scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
+            optimizer,
+            T_max=cfg.training.scheduler_t0_steps,
+            eta_min=cfg.training.eta_min,
+        )
+        log.info(
+            f"Using CosineAnnealingLR: T_max={cfg.training.scheduler_t0_steps} "
+            f"steps, eta_min={cfg.training.eta_min}"
+        )
+    clip_grad_norm = getattr(cfg.training, "clip_grad_norm", None)
+    if clip_grad_norm is not None:
+        log.info(f"Gradient clipping enabled: max_norm={clip_grad_norm}")
     axis_dropout_p = float(getattr(cfg.training, "axis_dropout_p", 0.0))
     criterion = torch.nn.BCEWithLogitsLoss()
 
@@ -181,6 +197,8 @@ def run_experiment(cfg: DictConfig) -> None:
 
             optimizer.zero_grad()
             loss.backward()
+            if clip_grad_norm is not None:
+                torch.nn.utils.clip_grad_norm_(model.parameters(), clip_grad_norm)
             optimizer.step()
             if scheduler is not None:
                 scheduler.step()
