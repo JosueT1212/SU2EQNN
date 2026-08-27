@@ -1,0 +1,9 @@
+[2026-08-17 23:28:36,920][__main__][INFO] - Using device: cuda
+[2026-08-17 23:28:36,921][__main__][INFO] - Loading datasets...
+[2026-08-17 23:30:39,101][__main__][INFO] - Model parameters: 371,025
+[2026-08-17 23:30:39,103][__main__][INFO] - Using Lion optimizer: lr=0.0003, weight_decay=0.2
+[2026-08-17 23:30:39,103][__main__][INFO] - Using CosineAnnealingLR: T_max=198702 steps, eta_min=1e-06
+[2026-08-17 23:30:39,103][__main__][INFO] - Gradient clipping enabled: max_norm=5
+[2026-08-17 23:30:39,207][__main__][INFO] - R8 embedding: pseudoscalar=off
+[2026-08-18 00:02:01,335][__main__][INFO] - Step 1000 | val AUC=0.9756 acc=0.9183
+[2026-08-18 00:02:01,579][__main__][INFO] - Saved best model (AUC=0.9756) to checkpoints/top_tagging_r8a_full21_b12_lgatrcfg.pt

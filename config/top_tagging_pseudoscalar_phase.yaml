@@ -8,7 +8,7 @@ data:
 model:
   in_mv_channels: 5
   hidden_mv_channels: 16
-  num_blocks: 6
+  num_blocks: 12
   num_heads: 4
 
 training:

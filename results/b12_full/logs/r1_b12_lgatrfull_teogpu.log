@@ -1,0 +1,8 @@
+[2026-08-27 20:57:50,999][__main__][INFO] - Using device: cuda
+[2026-08-27 20:57:50,999][__main__][INFO] - Loading datasets...
+[2026-08-27 20:59:57,045][__main__][INFO] - Model parameters: 358,737
+[2026-08-27 20:59:57,047][__main__][INFO] - Using Lion optimizer: lr=0.0003, weight_decay=0.2
+[2026-08-27 20:59:57,047][__main__][INFO] - Using CosineAnnealingLR: T_max=198702 steps, eta_min=1e-06
+[2026-08-27 20:59:57,047][__main__][INFO] - Gradient clipping enabled: max_norm=5
+[2026-08-27 22:43:22,606][__main__][INFO] - Step 1000 | val AUC=0.9740 acc=0.9195
+[2026-08-27 22:43:22,676][__main__][INFO] - Saved best model (AUC=0.9740) to checkpoints/top_tagging_r1_full21_b12_lgatrfull.pt

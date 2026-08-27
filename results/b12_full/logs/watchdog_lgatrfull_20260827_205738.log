@@ -1,0 +1,169 @@
+### 2026-08-27T20:57:38+02:00
+0, 0 MiB, 0 %
+1, 0 MiB, 0 %
+2, 0 MiB, 0 %
+3, 0 MiB, 0 %
+1024193       00:00  8940 Ds   /home/arivero/SU2EQNN-r8/.venv/bin/python -m experiments.top_tagging.experiment --config-name=top_tagging_r1_full_b12_lgatrfull
+1024196       00:00  8936 Ds   /home/arivero/SU2EQNN-r8/.venv/bin/python -m experiments.top_tagging.experiment --config-name=top_tagging_r7_patch_full_b12_lgatrfull
+1024200       00:00  8948 Ds   /home/arivero/SU2EQNN-r8/.venv/bin/python -m experiments.top_tagging.experiment --config-name=top_tagging_r8a_full_b12_lgatrfull
+1024204       00:00  8936 Ds   /home/arivero/SU2EQNN-r8/.venv/bin/python -m experiments.top_tagging.experiment --config-name=top_tagging_r8b_full_b12_lgatrfull
+1024190       00:00  3596 Ss+  bash -c cd /home/arivero/SU2EQNN &&      CUDA_VISIBLE_DEVICES=0 PYTHONPATH=/home/arivero/SU2EQNN      setsid /home/arivero/SU2EQNN-r8/.venv/bin/python -m experiments.top_tagging.experiment --config-name=top_tagging_r1_full_b12_lgatrfull      > /home/arivero/r1_b12_lgatrfull_teogpu.log 2>&1;      echo "EXIT_STATUS=$? at $(date -Is)" >> /home/arivero/r1_b12_lgatrfull_teogpu.log;      sleep 604800
+[Wed Aug 26 07:20:39 2026] SELinux:  policy capability cgroup_seclabel=1
+[Wed Aug 26 07:20:39 2026] SELinux:  policy capability nnp_nosuid_transition=1
+[Wed Aug 26 07:20:39 2026] SELinux:  policy capability genfs_seclabel_symlinks=1
+### 2026-08-27T21:07:39+02:00
+0, 25051 MiB, 100 %
+1, 26059 MiB, 97 %
+2, 25897 MiB, 100 %
+3, 26075 MiB, 94 %
+1024204       10:00 9794204 Rsl /home/arivero/SU2EQNN-r8/.venv/bin/python -m experiments.top_tagging.experiment --config-name=top_tagging_r8b_full_b12_lgatrfull
+1024200       10:00 8462080 Ssl /home/arivero/SU2EQNN-r8/.venv/bin/python -m experiments.top_tagging.experiment --config-name=top_tagging_r8a_full_b12_lgatrfull
+1024196       10:00 8458172 Ssl /home/arivero/SU2EQNN-r8/.venv/bin/python -m experiments.top_tagging.experiment --config-name=top_tagging_r7_patch_full_b12_lgatrfull
+1024193       10:00 8453036 Ssl /home/arivero/SU2EQNN-r8/.venv/bin/python -m experiments.top_tagging.experiment --config-name=top_tagging_r1_full_b12_lgatrfull
+1024206       10:00  3968 Ss+  bash -c while true; do        { echo "### $(date -Is)";          nvidia-smi --query-gpu=index,memory.used,utilization.gpu --format=csv,noheader;          ps -u arivero -o pid,etime,rss,stat,cmd --sort=-rss | grep -E "experiment" | head -5;          dmesg -T 2>/dev/null | tail -3;        } >> /home/arivero/watchdog_lgatrfull_20260827_205738.log 2>&1;        sleep 600;      done
+[Wed Aug 26 07:20:39 2026] SELinux:  policy capability cgroup_seclabel=1
+[Wed Aug 26 07:20:39 2026] SELinux:  policy capability nnp_nosuid_transition=1
+[Wed Aug 26 07:20:39 2026] SELinux:  policy capability genfs_seclabel_symlinks=1
+### 2026-08-27T21:17:39+02:00
+0, 26191 MiB, 98 %
+1, 28105 MiB, 100 %
+2, 27951 MiB, 100 %
+3, 15887 MiB, 100 %
+1024204       20:00 9795116 Rsl /home/arivero/SU2EQNN-r8/.venv/bin/python -m experiments.top_tagging.experiment --config-name=top_tagging_r8b_full_b12_lgatrfull
+1024200       20:00 8467628 Rsl /home/arivero/SU2EQNN-r8/.venv/bin/python -m experiments.top_tagging.experiment --config-name=top_tagging_r8a_full_b12_lgatrfull
+1024196       20:00 8459536 Rsl /home/arivero/SU2EQNN-r8/.venv/bin/python -m experiments.top_tagging.experiment --config-name=top_tagging_r7_patch_full_b12_lgatrfull
+1024193       20:00 8453700 Rsl /home/arivero/SU2EQNN-r8/.venv/bin/python -m experiments.top_tagging.experiment --config-name=top_tagging_r1_full_b12_lgatrfull
+1024206       20:00  3968 Ss+  bash -c while true; do        { echo "### $(date -Is)";          nvidia-smi --query-gpu=index,memory.used,utilization.gpu --format=csv,noheader;          ps -u arivero -o pid,etime,rss,stat,cmd --sort=-rss | grep -E "experiment" | head -5;          dmesg -T 2>/dev/null | tail -3;        } >> /home/arivero/watchdog_lgatrfull_20260827_205738.log 2>&1;        sleep 600;      done
+[Wed Aug 26 07:20:39 2026] SELinux:  policy capability cgroup_seclabel=1
+[Wed Aug 26 07:20:39 2026] SELinux:  policy capability nnp_nosuid_transition=1
+[Wed Aug 26 07:20:39 2026] SELinux:  policy capability genfs_seclabel_symlinks=1
+### 2026-08-27T21:27:39+02:00
+0, 27947 MiB, 100 %
+1, 17251 MiB, 100 %
+2, 16989 MiB, 100 %
+3, 40479 MiB, 100 %
+1024204       30:00 9796344 Rsl /home/arivero/SU2EQNN-r8/.venv/bin/python -m experiments.top_tagging.experiment --config-name=top_tagging_r8b_full_b12_lgatrfull
+1024200       30:00 8468928 Rsl /home/arivero/SU2EQNN-r8/.venv/bin/python -m experiments.top_tagging.experiment --config-name=top_tagging_r8a_full_b12_lgatrfull
+1024196       30:00 8460488 Rsl /home/arivero/SU2EQNN-r8/.venv/bin/python -m experiments.top_tagging.experiment --config-name=top_tagging_r7_patch_full_b12_lgatrfull
+1024193       30:00 8454656 Rsl /home/arivero/SU2EQNN-r8/.venv/bin/python -m experiments.top_tagging.experiment --config-name=top_tagging_r1_full_b12_lgatrfull
+1024206       30:00  3968 Ss+  bash -c while true; do        { echo "### $(date -Is)";          nvidia-smi --query-gpu=index,memory.used,utilization.gpu --format=csv,noheader;          ps -u arivero -o pid,etime,rss,stat,cmd --sort=-rss | grep -E "experiment" | head -5;          dmesg -T 2>/dev/null | tail -3;        } >> /home/arivero/watchdog_lgatrfull_20260827_205738.log 2>&1;        sleep 600;      done
+[Wed Aug 26 07:20:39 2026] SELinux:  policy capability cgroup_seclabel=1
+[Wed Aug 26 07:20:39 2026] SELinux:  policy capability nnp_nosuid_transition=1
+[Wed Aug 26 07:20:39 2026] SELinux:  policy capability genfs_seclabel_symlinks=1
+### 2026-08-27T21:37:39+02:00
+0, 40495 MiB, 100 %
+1, 17251 MiB, 100 %
+2, 16989 MiB, 100 %
+3, 16963 MiB, 100 %
+1024204       40:01 9797276 Rsl /home/arivero/SU2EQNN-r8/.venv/bin/python -m experiments.top_tagging.experiment --config-name=top_tagging_r8b_full_b12_lgatrfull
+1024200       40:01 8469636 Rsl /home/arivero/SU2EQNN-r8/.venv/bin/python -m experiments.top_tagging.experiment --config-name=top_tagging_r8a_full_b12_lgatrfull
+1024196       40:01 8462108 Rsl /home/arivero/SU2EQNN-r8/.venv/bin/python -m experiments.top_tagging.experiment --config-name=top_tagging_r7_patch_full_b12_lgatrfull
+1024193       40:01 8455280 Rsl /home/arivero/SU2EQNN-r8/.venv/bin/python -m experiments.top_tagging.experiment --config-name=top_tagging_r1_full_b12_lgatrfull
+1024206       40:01  3972 Ss+  bash -c while true; do        { echo "### $(date -Is)";          nvidia-smi --query-gpu=index,memory.used,utilization.gpu --format=csv,noheader;          ps -u arivero -o pid,etime,rss,stat,cmd --sort=-rss | grep -E "experiment" | head -5;          dmesg -T 2>/dev/null | tail -3;        } >> /home/arivero/watchdog_lgatrfull_20260827_205738.log 2>&1;        sleep 600;      done
+[Wed Aug 26 07:20:39 2026] SELinux:  policy capability cgroup_seclabel=1
+[Wed Aug 26 07:20:39 2026] SELinux:  policy capability nnp_nosuid_transition=1
+[Wed Aug 26 07:20:39 2026] SELinux:  policy capability genfs_seclabel_symlinks=1
+### 2026-08-27T21:47:39+02:00
+0, 17039 MiB, 100 %
+1, 17251 MiB, 100 %
+2, 16989 MiB, 100 %
+3, 16963 MiB, 99 %
+1024204       50:01 9798444 Rsl /home/arivero/SU2EQNN-r8/.venv/bin/python -m experiments.top_tagging.experiment --config-name=top_tagging_r8b_full_b12_lgatrfull
+1024200       50:01 8469636 Rsl /home/arivero/SU2EQNN-r8/.venv/bin/python -m experiments.top_tagging.experiment --config-name=top_tagging_r8a_full_b12_lgatrfull
+1024196       50:01 8462112 Rsl /home/arivero/SU2EQNN-r8/.venv/bin/python -m experiments.top_tagging.experiment --config-name=top_tagging_r7_patch_full_b12_lgatrfull
+1024193       50:01 8455872 Rsl /home/arivero/SU2EQNN-r8/.venv/bin/python -m experiments.top_tagging.experiment --config-name=top_tagging_r1_full_b12_lgatrfull
+1024206       50:01  3972 Ss+  bash -c while true; do        { echo "### $(date -Is)";          nvidia-smi --query-gpu=index,memory.used,utilization.gpu --format=csv,noheader;          ps -u arivero -o pid,etime,rss,stat,cmd --sort=-rss | grep -E "experiment" | head -5;          dmesg -T 2>/dev/null | tail -3;        } >> /home/arivero/watchdog_lgatrfull_20260827_205738.log 2>&1;        sleep 600;      done
+[Wed Aug 26 07:20:39 2026] SELinux:  policy capability cgroup_seclabel=1
+[Wed Aug 26 07:20:39 2026] SELinux:  policy capability nnp_nosuid_transition=1
+[Wed Aug 26 07:20:39 2026] SELinux:  policy capability genfs_seclabel_symlinks=1
+### 2026-08-27T21:57:39+02:00
+0, 17039 MiB, 100 %
+1, 17251 MiB, 99 %
+2, 26105 MiB, 97 %
+3, 16963 MiB, 100 %
+1024204    01:00:01 9799692 Rsl /home/arivero/SU2EQNN-r8/.venv/bin/python -m experiments.top_tagging.experiment --config-name=top_tagging_r8b_full_b12_lgatrfull
+1024200    01:00:01 8470732 Rsl /home/arivero/SU2EQNN-r8/.venv/bin/python -m experiments.top_tagging.experiment --config-name=top_tagging_r8a_full_b12_lgatrfull
+1024196    01:00:01 8462112 Rsl /home/arivero/SU2EQNN-r8/.venv/bin/python -m experiments.top_tagging.experiment --config-name=top_tagging_r7_patch_full_b12_lgatrfull
+1024193    01:00:01 8456400 Rsl /home/arivero/SU2EQNN-r8/.venv/bin/python -m experiments.top_tagging.experiment --config-name=top_tagging_r1_full_b12_lgatrfull
+1024206    01:00:01  3972 Ss+  bash -c while true; do        { echo "### $(date -Is)";          nvidia-smi --query-gpu=index,memory.used,utilization.gpu --format=csv,noheader;          ps -u arivero -o pid,etime,rss,stat,cmd --sort=-rss | grep -E "experiment" | head -5;          dmesg -T 2>/dev/null | tail -3;        } >> /home/arivero/watchdog_lgatrfull_20260827_205738.log 2>&1;        sleep 600;      done
+[Wed Aug 26 07:20:39 2026] SELinux:  policy capability cgroup_seclabel=1
+[Wed Aug 26 07:20:39 2026] SELinux:  policy capability nnp_nosuid_transition=1
+[Wed Aug 26 07:20:39 2026] SELinux:  policy capability genfs_seclabel_symlinks=1
+### 2026-08-27T22:07:39+02:00
+0, 17039 MiB, 100 %
+1, 43479 MiB, 100 %
+2, 29425 MiB, 92 %
+3, 16963 MiB, 100 %
+1024204    01:10:01 9800760 Rsl /home/arivero/SU2EQNN-r8/.venv/bin/python -m experiments.top_tagging.experiment --config-name=top_tagging_r8b_full_b12_lgatrfull
+1024200    01:10:01 8551132 Ssl /home/arivero/SU2EQNN-r8/.venv/bin/python -m experiments.top_tagging.experiment --config-name=top_tagging_r8a_full_b12_lgatrfull
+1024196    01:10:01 8498020 Ssl /home/arivero/SU2EQNN-r8/.venv/bin/python -m experiments.top_tagging.experiment --config-name=top_tagging_r7_patch_full_b12_lgatrfull
+1024193    01:10:01 8457452 Rsl /home/arivero/SU2EQNN-r8/.venv/bin/python -m experiments.top_tagging.experiment --config-name=top_tagging_r1_full_b12_lgatrfull
+1024206    01:10:01  3972 Ss+  bash -c while true; do        { echo "### $(date -Is)";          nvidia-smi --query-gpu=index,memory.used,utilization.gpu --format=csv,noheader;          ps -u arivero -o pid,etime,rss,stat,cmd --sort=-rss | grep -E "experiment" | head -5;          dmesg -T 2>/dev/null | tail -3;        } >> /home/arivero/watchdog_lgatrfull_20260827_205738.log 2>&1;        sleep 600;      done
+[Wed Aug 26 07:20:39 2026] SELinux:  policy capability cgroup_seclabel=1
+[Wed Aug 26 07:20:39 2026] SELinux:  policy capability nnp_nosuid_transition=1
+[Wed Aug 26 07:20:39 2026] SELinux:  policy capability genfs_seclabel_symlinks=1
+### 2026-08-27T22:17:39+02:00
+0, 17039 MiB, 100 %
+1, 43479 MiB, 100 %
+2, 29425 MiB, 100 %
+3, 43715 MiB, 100 %
+1024204    01:20:01 9836736 Rsl /home/arivero/SU2EQNN-r8/.venv/bin/python -m experiments.top_tagging.experiment --config-name=top_tagging_r8b_full_b12_lgatrfull
+1024200    01:20:01 8561936 Rsl /home/arivero/SU2EQNN-r8/.venv/bin/python -m experiments.top_tagging.experiment --config-name=top_tagging_r8a_full_b12_lgatrfull
+1024196    01:20:01 8498020 Rsl /home/arivero/SU2EQNN-r8/.venv/bin/python -m experiments.top_tagging.experiment --config-name=top_tagging_r7_patch_full_b12_lgatrfull
+1024193    01:20:01 8457452 Rsl /home/arivero/SU2EQNN-r8/.venv/bin/python -m experiments.top_tagging.experiment --config-name=top_tagging_r1_full_b12_lgatrfull
+1024206    01:20:01  3972 Ss+  bash -c while true; do        { echo "### $(date -Is)";          nvidia-smi --query-gpu=index,memory.used,utilization.gpu --format=csv,noheader;          ps -u arivero -o pid,etime,rss,stat,cmd --sort=-rss | grep -E "experiment" | head -5;          dmesg -T 2>/dev/null | tail -3;        } >> /home/arivero/watchdog_lgatrfull_20260827_205738.log 2>&1;        sleep 600;      done
+[Wed Aug 26 07:20:39 2026] SELinux:  policy capability cgroup_seclabel=1
+[Wed Aug 26 07:20:39 2026] SELinux:  policy capability nnp_nosuid_transition=1
+[Wed Aug 26 07:20:39 2026] SELinux:  policy capability genfs_seclabel_symlinks=1
+### 2026-08-27T22:27:39+02:00
+0, 17039 MiB, 100 %
+1, 43479 MiB, 100 %
+2, 29425 MiB, 100 %
+3, 27269 MiB, 100 %
+1024204    01:30:01 9836888 Rsl /home/arivero/SU2EQNN-r8/.venv/bin/python -m experiments.top_tagging.experiment --config-name=top_tagging_r8b_full_b12_lgatrfull
+1024200    01:30:01 8562012 Rsl /home/arivero/SU2EQNN-r8/.venv/bin/python -m experiments.top_tagging.experiment --config-name=top_tagging_r8a_full_b12_lgatrfull
+1024196    01:30:01 8498020 Rsl /home/arivero/SU2EQNN-r8/.venv/bin/python -m experiments.top_tagging.experiment --config-name=top_tagging_r7_patch_full_b12_lgatrfull
+1024193    01:30:01 8457452 Rsl /home/arivero/SU2EQNN-r8/.venv/bin/python -m experiments.top_tagging.experiment --config-name=top_tagging_r1_full_b12_lgatrfull
+1024206    01:30:01  3972 Ss+  bash -c while true; do        { echo "### $(date -Is)";          nvidia-smi --query-gpu=index,memory.used,utilization.gpu --format=csv,noheader;          ps -u arivero -o pid,etime,rss,stat,cmd --sort=-rss | grep -E "experiment" | head -5;          dmesg -T 2>/dev/null | tail -3;        } >> /home/arivero/watchdog_lgatrfull_20260827_205738.log 2>&1;        sleep 600;      done
+[Wed Aug 26 07:20:39 2026] SELinux:  policy capability cgroup_seclabel=1
+[Wed Aug 26 07:20:39 2026] SELinux:  policy capability nnp_nosuid_transition=1
+[Wed Aug 26 07:20:39 2026] SELinux:  policy capability genfs_seclabel_symlinks=1
+### 2026-08-27T22:37:39+02:00
+0, 17039 MiB, 100 %
+1, 43479 MiB, 100 %
+2, 29425 MiB, 100 %
+3, 27269 MiB, 100 %
+1024204    01:40:01 9840528 Rsl /home/arivero/SU2EQNN-r8/.venv/bin/python -m experiments.top_tagging.experiment --config-name=top_tagging_r8b_full_b12_lgatrfull
+1024200    01:40:01 8562724 Rsl /home/arivero/SU2EQNN-r8/.venv/bin/python -m experiments.top_tagging.experiment --config-name=top_tagging_r8a_full_b12_lgatrfull
+1024196    01:40:01 8498020 Rsl /home/arivero/SU2EQNN-r8/.venv/bin/python -m experiments.top_tagging.experiment --config-name=top_tagging_r7_patch_full_b12_lgatrfull
+1024193    01:40:01 8457452 Rsl /home/arivero/SU2EQNN-r8/.venv/bin/python -m experiments.top_tagging.experiment --config-name=top_tagging_r1_full_b12_lgatrfull
+1024206    01:40:01  3972 Ss+  bash -c while true; do        { echo "### $(date -Is)";          nvidia-smi --query-gpu=index,memory.used,utilization.gpu --format=csv,noheader;          ps -u arivero -o pid,etime,rss,stat,cmd --sort=-rss | grep -E "experiment" | head -5;          dmesg -T 2>/dev/null | tail -3;        } >> /home/arivero/watchdog_lgatrfull_20260827_205738.log 2>&1;        sleep 600;      done
+[Wed Aug 26 07:20:39 2026] SELinux:  policy capability cgroup_seclabel=1
+[Wed Aug 26 07:20:39 2026] SELinux:  policy capability nnp_nosuid_transition=1
+[Wed Aug 26 07:20:39 2026] SELinux:  policy capability genfs_seclabel_symlinks=1
+### 2026-08-27T22:47:39+02:00
+0, 43271 MiB, 99 %
+1, 43479 MiB, 93 %
+2, 29425 MiB, 100 %
+3, 27269 MiB, 100 %
+1024204    01:50:01 9840580 Rsl /home/arivero/SU2EQNN-r8/.venv/bin/python -m experiments.top_tagging.experiment --config-name=top_tagging_r8b_full_b12_lgatrfull
+1024200    01:50:01 8562724 Rsl /home/arivero/SU2EQNN-r8/.venv/bin/python -m experiments.top_tagging.experiment --config-name=top_tagging_r8a_full_b12_lgatrfull
+1024196    01:50:01 8498020 Rsl /home/arivero/SU2EQNN-r8/.venv/bin/python -m experiments.top_tagging.experiment --config-name=top_tagging_r7_patch_full_b12_lgatrfull
+1024193    01:50:01 8493192 Rsl /home/arivero/SU2EQNN-r8/.venv/bin/python -m experiments.top_tagging.experiment --config-name=top_tagging_r1_full_b12_lgatrfull
+1024206    01:50:01  3972 Ss+  bash -c while true; do        { echo "### $(date -Is)";          nvidia-smi --query-gpu=index,memory.used,utilization.gpu --format=csv,noheader;          ps -u arivero -o pid,etime,rss,stat,cmd --sort=-rss | grep -E "experiment" | head -5;          dmesg -T 2>/dev/null | tail -3;        } >> /home/arivero/watchdog_lgatrfull_20260827_205738.log 2>&1;        sleep 600;      done
+[Wed Aug 26 07:20:39 2026] SELinux:  policy capability cgroup_seclabel=1
+[Wed Aug 26 07:20:39 2026] SELinux:  policy capability nnp_nosuid_transition=1
+[Wed Aug 26 07:20:39 2026] SELinux:  policy capability genfs_seclabel_symlinks=1
+### 2026-08-27T22:57:40+02:00
+0, 43761 MiB, 99 %
+1, 43479 MiB, 96 %
+2, 29425 MiB, 94 %
+3, 27269 MiB, 100 %
+1024204    02:00:01 9840628 Rsl /home/arivero/SU2EQNN-r8/.venv/bin/python -m experiments.top_tagging.experiment --config-name=top_tagging_r8b_full_b12_lgatrfull
+1024200    02:00:01 8597540 Ssl /home/arivero/SU2EQNN-r8/.venv/bin/python -m experiments.top_tagging.experiment --config-name=top_tagging_r8a_full_b12_lgatrfull
+1024196    02:00:01 8498020 Rsl /home/arivero/SU2EQNN-r8/.venv/bin/python -m experiments.top_tagging.experiment --config-name=top_tagging_r7_patch_full_b12_lgatrfull
+1024193    02:00:01 8493192 Rsl /home/arivero/SU2EQNN-r8/.venv/bin/python -m experiments.top_tagging.experiment --config-name=top_tagging_r1_full_b12_lgatrfull
+1024206    02:00:01  3972 Ss+  bash -c while true; do        { echo "### $(date -Is)";          nvidia-smi --query-gpu=index,memory.used,utilization.gpu --format=csv,noheader;          ps -u arivero -o pid,etime,rss,stat,cmd --sort=-rss | grep -E "experiment" | head -5;          dmesg -T 2>/dev/null | tail -3;        } >> /home/arivero/watchdog_lgatrfull_20260827_205738.log 2>&1;        sleep 600;      done
+[Wed Aug 26 07:20:39 2026] SELinux:  policy capability cgroup_seclabel=1
+[Wed Aug 26 07:20:39 2026] SELinux:  policy capability nnp_nosuid_transition=1
+[Wed Aug 26 07:20:39 2026] SELinux:  policy capability genfs_seclabel_symlinks=1

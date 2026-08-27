@@ -19,3 +19,7 @@ runs/
 # Local-only docs: specs, plans, and reference notes stay out of the repo.
 # READMEs are still tracked.
 docs/**/*.md
+
+# Local run artifacts
+checkpoints/
+outputs/
