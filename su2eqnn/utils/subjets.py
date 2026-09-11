@@ -1,6 +1,7 @@
-"""Exclusive-kT subjet clustering and jet-axis utilities (numpy, no fastjet).
-
-Used offline by scripts/precompute_axes.py — not on the training hot path.
+# Authors: J. Tapia-Hernandez and A. Ramirez-Morales
+"""
+Exclusive-kT subjet clustering and jet-axis utilities (numpy, no fastjet).
+Used scripts/precompute_axes.py
 """
 
 import numpy as np
