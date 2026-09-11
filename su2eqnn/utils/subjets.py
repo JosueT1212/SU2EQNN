@@ -1,8 +1,6 @@
 # Authors: J. Tapia-Hernandez and A. Ramirez-Morales
-"""
-Exclusive-kT subjet clustering and jet-axis utilities (numpy, no fastjet).
-Used scripts/precompute_axes.py
-"""
+# Exclusive-kT subjet clustering and jet-axis utilities
+# Used scripts/precompute_axes.py
 
 import numpy as np
 
