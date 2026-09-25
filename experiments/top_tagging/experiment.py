@@ -23,6 +23,7 @@ from experiments.top_tagging.dataset import TopTaggingDataset
 from experiments.top_tagging.embedding import (
     build_embedding, apply_axis_channel_dropout, apply_patch_channel_dropout,
 )
+from experiments.top_tagging.embedding.core import random_z_boost
 from experiments.top_tagging.wrapper import TopTaggingWrapper, TopTaggingWrapperBivectorPatch
 
 log = logging.getLogger(__name__)
@@ -86,13 +87,37 @@ def build_model(cfg) -> TopTaggingWrapper:
 
 
 def evaluate(model, loader, cfg, device):
-    """Run evaluation on a DataLoader, return AUC and accuracy."""
+    """Run evaluation on a DataLoader, return AUC and accuracy.
+
+    cfg.evaluation.random_boost_rapidity = Y > 0 boosts every jet along z by a
+    rapidity from U[-Y, Y] (seeded by cfg.evaluation.boost_seed) before
+    embedding: the out-of-distribution test of boost invariance. The boost and
+    the rest-frame canonicalization run in float64; the embedding is cast to
+    the data dtype afterwards.
+    """
+    max_rapidity = float(getattr(cfg.evaluation, "random_boost_rapidity", 0.0))
+    generator = None
+    if max_rapidity > 0:
+        generator = torch.Generator().manual_seed(
+            int(getattr(cfg.evaluation, "boost_seed", 0))
+        )
     model.eval()
     all_logits, all_labels = [], []
     with torch.no_grad():
         for batch in loader:
             batch = batch.to(device)
-            embedding = build_embedding(cfg, batch.x, batch.ptr, collect_aux(batch))
+            aux = collect_aux(batch)
+            if generator is None:
+                embedding = build_embedding(cfg, batch.x, batch.ptr, aux)
+            else:
+                if aux:
+                    raise ValueError(
+                        f"random_boost_rapidity with lab-frame aux keys {sorted(aux)}: "
+                        "the aux features would not be boosted"
+                    )
+                x = random_z_boost(batch.x, batch.ptr, max_rapidity, generator)
+                embedding = build_embedding(cfg, x, batch.ptr, aux)
+                embedding["mv"] = embedding["mv"].to(batch.x.dtype)
             logits = model(embedding)  # (B, 1)
             all_logits.append(logits.cpu())
             all_labels.append(batch.label.cpu())
@@ -117,11 +142,15 @@ def run_experiment(cfg: DictConfig) -> None:
     ds_train = TopTaggingDataset(rescale_data=cfg.data.rescale_data)
     ds_val = TopTaggingDataset(rescale_data=cfg.data.rescale_data)
     ds_test = TopTaggingDataset(rescale_data=cfg.data.rescale_data)
-    ds_train.load_data(cfg.data.path, "train")
+    if cfg.training.epochs > 0:  # epochs=0: score an existing checkpoint only
+        ds_train.load_data(cfg.data.path, "train")
     ds_val.load_data(cfg.data.path, "val")
     ds_test.load_data(cfg.data.path, "test")
 
-    loader_train = GeometricDataLoader(ds_train, batch_size=cfg.training.batch_size, shuffle=True)
+    loader_train = (
+        GeometricDataLoader(ds_train, batch_size=cfg.training.batch_size, shuffle=True)
+        if len(ds_train) else []
+    )
     loader_val = GeometricDataLoader(ds_val, batch_size=cfg.evaluation.batch_size, shuffle=False)
     loader_test = GeometricDataLoader(ds_test, batch_size=cfg.evaluation.batch_size, shuffle=False)
 

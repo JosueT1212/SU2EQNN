@@ -232,3 +232,27 @@ def test_rest_rejects_non_timelike_jet():
     x = torch.tensor([[1.0, 0.0, 0.0, 1.0]], dtype=torch.float64)   # single massless
     with pytest.raises(ValueError, match="non-timelike"):
         build_embedding(cfg("rest", "none"), x, torch.tensor([0, 1]), {})
+
+
+# --- OOD evaluation wiring -----------------------------------------------------
+
+def test_evaluate_random_boost_flat_for_rest_and_moves_lab():
+    from torch_geometric.data import Data
+    from torch_geometric.loader import DataLoader
+    from experiments.top_tagging.experiment import evaluate
+
+    x, ptr = toy_jets(n_jets=16, seed=3)
+    data = [Data(x=x[ptr[i]:ptr[i + 1]].float(), label=torch.tensor(i % 2 == 0))
+            for i in range(len(ptr) - 1)]
+    loader = DataLoader(data, batch_size=8, shuffle=False)
+
+    def scores(frame, beams, Y):
+        c = cfg(frame, beams)
+        c.evaluation = SimpleNamespace(random_boost_rapidity=Y, boost_seed=0)
+        torch.manual_seed(0)
+        model = build_model(c).eval()
+        return evaluate(model, loader, c, torch.device("cpu"))["auc"]
+
+    assert scores("rest", "none", 2.0) == pytest.approx(scores("rest", "none", 0.0), abs=1e-6)
+    assert scores("rest", "boosted", 2.0) == pytest.approx(scores("rest", "boosted", 0.0), abs=1e-6)
+    assert scores("lab", "lab", 2.0) != pytest.approx(scores("lab", "lab", 0.0), abs=1e-6)
