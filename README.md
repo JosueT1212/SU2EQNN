@@ -84,6 +84,40 @@ Run the test suite with `pytest`.
 The last two are a matched pair: same physical information, once as an
 equivariant channel and once as an invariant scalar.
 
+### Rest-frame (little-group) canonicalization
+
+`data.frame: rest` boosts every jet to its own rest frame with the inverse
+standard boost of its total momentum, $L(P)^{-1}$, before the unchanged
+embedding. A lab Lorentz transform then reaches the network only as the
+Wigner rotation $W(\Lambda, P)\in SU(2)$, which the Spin(3) network already
+respects (`Draft/little-group-canonicalization.tex`, Thm 5.2).
+`data.beams` picks the spurions:
+
+| Config | Frame / beams | Symmetry of the tagger |
+|---|---|---|
+| `top_tagging_r1_full_b12` | `lab` / `lab` | $O(2)$ about the beam; not boost-invariant |
+| `top_tagging_rest_frame_full_b12` | `rest` / `none` | exact $SO^+(1,3)$ invariance |
+| `top_tagging_rest_frame_boosted_beams_full_b12` | `rest` / `boosted` | invariant under $z$-boosts × $z$-rotations; transverse boosts broken by the beam |
+
+`boosted` tokens are the null beam directions $(1,0,0,\pm1)$ boosted to the
+rest frame and normalized to a unit grade-1 vector. `frame: rest` supports
+only the plain baseline: injectors, other layouts and lab-frame aux keys
+raise. These three configs are full-dataset only and read the raw
+`data/toptagging_full.npz` (no aux keys).
+
+**Boost-robustness evaluation.** `evaluation.random_boost_rapidity=Y` boosts
+each test jet along $z$ by a rapidity from $U[-Y, Y]$. With
+`training.epochs=0` the run skips training, loads `training.checkpoint_path`
+and only evaluates:
+
+```bash
+PYTHONPATH=$(pwd) .venv/bin/python -m experiments.top_tagging.experiment \
+  --config-name top_tagging_rest_frame_full_b12 \
+  training.epochs=0 evaluation.random_boost_rapidity=2.0
+```
+
+The rest-frame models must give the same AUC at every $Y$; the lab model need not.
+
 For the physics behind each variant see `Draft/main.tex`; this README does not
 restate it.
 
