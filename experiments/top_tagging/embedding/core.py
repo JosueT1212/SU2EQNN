@@ -18,6 +18,72 @@ def get_batch_from_ptr(ptr: Tensor) -> Tensor:
     )
 
 
+def boost_to_rest(v: Tensor, P: Tensor) -> Tensor:
+    """Apply the inverse standard boost L(P)^-1 to four-vectors v.
+
+    Parameters
+    ----------
+    v : (..., 4) four-vectors (E, px, py, pz)
+    P : (..., 4) timelike reference momentum, broadcastable to v
+
+    Returns
+    -------
+    (..., 4) v in the rest frame of P, in v's dtype. Computed in float64:
+    real jets reach gamma ~ 105 and float32 loses the rest-frame components.
+    (gamma-1)/|P|^2 = 1/(m(P0+m)), so there is no division by |P| and a jet
+    already at rest maps to the identity.
+    """
+    v64, P64 = v.double(), P.double()
+    P0, Pv = P64[..., :1], P64[..., 1:]
+    v0, vv = v64[..., :1], v64[..., 1:]
+    m = torch.sqrt(P0**2 - (Pv**2).sum(-1, keepdim=True))
+    Pdotv = (Pv * vv).sum(-1, keepdim=True)
+    out0 = (P0 * v0 - Pdotv) / m
+    outv = vv + Pv * (Pdotv / (m * (P0 + m)) - v0 / m)
+    return torch.cat([out0, outv], dim=-1).to(v.dtype)
+
+
+def jet_momenta(fourmomenta: Tensor, ptr: Tensor) -> Tensor:
+    """Total four-momentum per jet, (batchsize, 4), in float64."""
+    batch = get_batch_from_ptr(ptr)
+    P = torch.zeros(len(ptr) - 1, 4, dtype=torch.float64, device=fourmomenta.device)
+    return P.index_add_(0, batch, fourmomenta.double())
+
+
+def rest_frame_beams(P: Tensor, two_beams: bool, dtype) -> Tensor:
+    """Beam tokens seen from each jet's rest frame, (batchsize, S, 8).
+
+    Boosts the null beam directions n = (1, 0, 0, +-1) with L(P)^-1 and keeps
+    the unit spatial direction (grade 1, slots 1-3). A z-boost only rescales a
+    null vector, so the token is exactly invariant under z-boosts x z-rotations;
+    the lab token's spacelike e3 would not be (its stabilizer is SO(1,2)).
+    """
+    signs = [1.0, -1.0] if two_beams else [1.0]
+    n = torch.tensor([[1.0, 0.0, 0.0, s] for s in signs],
+                     dtype=torch.float64, device=P.device)
+    nb = boost_to_rest(n.unsqueeze(0), P.unsqueeze(1))           # (B, S, 4)
+    tokens = torch.zeros(P.shape[0], len(signs), 8, dtype=torch.float64, device=P.device)
+    tokens[..., 1:4] = nb[..., 1:] / nb[..., :1]
+    return tokens.to(dtype)
+
+
+def random_z_boost(fourmomenta: Tensor, ptr: Tensor, max_rapidity: float,
+                   generator: torch.Generator) -> Tensor:
+    """Boost each jet along z by a rapidity drawn from U[-max_rapidity, max_rapidity].
+
+    Out-of-distribution evaluation only. Returns float64; the caller casts the
+    embedding to the model dtype after canonicalization.
+    """
+    y = (torch.rand(len(ptr) - 1, generator=generator, dtype=torch.float64) * 2 - 1)
+    y = (y * max_rapidity).to(fourmomenta.device)[get_batch_from_ptr(ptr)]
+    x = fourmomenta.double()
+    E, pz = x[:, 0], x[:, 3]
+    out = x.clone()
+    out[:, 0] = torch.cosh(y) * E + torch.sinh(y) * pz
+    out[:, 3] = torch.sinh(y) * E + torch.cosh(y) * pz
+    return out
+
+
 def wedge_into(mv: Tensor, chan: slice, p3: Tensor, ax: Tensor) -> None:
     """Write the pure grade-2 wedge p3 ∧ ax into slots 4/5/6 of `chan`.
 
@@ -33,10 +99,13 @@ def wedge_into(mv: Tensor, chan: slice, p3: Tensor, ax: Tensor) -> None:
     mv[:, chan, 6] = p3[..., 1] * ax[..., 2] - p3[..., 2] * ax[..., 1]  # e23
 
 
-def attach_spurions(mv: Tensor, ptr: Tensor, two_beams: bool) -> dict:
+def attach_spurions(mv: Tensor, ptr: Tensor, two_beams: bool,
+                    tokens: Tensor = None) -> dict:
     """Interleave beam spurion tokens into `mv` and rebuild the batch index.
 
     Spurions carry the beam multivector in channel 0 and zeros elsewhere.
+    `tokens` (batchsize, S, 8) replaces the shared lab spurions with per-jet
+    ones (rest-frame beams); S = 0 means no beam tokens at all.
 
     Returns
     -------
@@ -45,14 +114,20 @@ def attach_spurions(mv: Tensor, ptr: Tensor, two_beams: bool) -> dict:
     batchsize = len(ptr) - 1
     n_channels = mv.shape[1]
 
-    spurions = embed_spurions(
-        two_beams=two_beams, device=mv.device, dtype=mv.dtype,
-    )
-    n_spurions = spurions.shape[0]
+    if tokens is None:
+        spurions = embed_spurions(
+            two_beams=two_beams, device=mv.device, dtype=mv.dtype,
+        )
+        tokens = spurions[:, 0, :].expand(batchsize, -1, -1)
+    n_spurions = tokens.shape[1]
+    if n_spurions == 0:
+        is_beam = torch.zeros(mv.shape[0], dtype=torch.bool, device=mv.device)
+        return {"mv": mv, "batch": get_batch_from_ptr(ptr), "is_beam": is_beam}
+
     spurions_full = torch.zeros(
-        n_spurions, n_channels, 8, dtype=mv.dtype, device=mv.device
+        batchsize, n_spurions, n_channels, 8, dtype=mv.dtype, device=mv.device
     )
-    spurions_full[:, 0, :] = spurions[:, 0, :]
+    spurions_full[:, :, 0, :] = tokens
 
     arange = torch.arange(batchsize, device=ptr.device)
     spurion_idxs = torch.stack(
@@ -66,7 +141,7 @@ def attach_spurions(mv: Tensor, ptr: Tensor, two_beams: bool) -> dict:
 
     mv_out = torch.empty(n_total, n_channels, 8, dtype=mv.dtype, device=mv.device)
     mv_out[~is_beam] = mv
-    mv_out[is_beam] = spurions_full.repeat(batchsize, 1, 1)
+    mv_out[is_beam] = spurions_full.reshape(-1, n_channels, 8)
 
     ptr_out = ptr.clone()
     ptr_out[1:] = ptr[1:] + (arange + 1) * n_spurions
