@@ -6,7 +6,7 @@ Architecture:
 
 import torch
 from torch import Tensor, nn
-from torch_geometric.utils import scatter, to_dense_batch
+from torch_geometric.utils import scatter
 
 
 def build_attention_mask(batch: Tensor, dtype: torch.dtype) -> Tensor:
@@ -34,15 +34,14 @@ def build_attention_mask(batch: Tensor, dtype: torch.dtype) -> Tensor:
     return mask
 
 
-def run_padded(net: nn.Module, mv: Tensor, batch: Tensor, patch_mv: Tensor = None) -> Tensor:
-    """Run GATr on jets stacked as padded (B, L_max) blocks; mean-pool grade 0.
+def run_grouped(net: nn.Module, mv: Tensor, batch: Tensor, patch_mv: Tensor = None) -> Tensor:
+    """Run GATr with attention restricted to each jet; mean-pool grade 0.
 
-    Attention then costs B * L_max^2 instead of n_total^2: a dense
-    (n_total, n_total) block-diagonal mask makes SDPA compute every
-    cross-jet entry (~100x waste at batch 128, ~50 tokens per jet). The
-    padding mask (B, 1, L_max) hides padded keys; padded queries are
-    computed and discarded. Every other layer acts per token, so the
-    logits equal the dense-mask version (tests/test_wrapper_padded_attention.py).
+    Passes the jet index `batch` as the attention mask: sdp_attention then pads
+    the jets into blocks for attention only (cost sum_jets L_max^2 instead of
+    n_total^2 for a dense block-diagonal mask), while every per-token layer
+    runs on the real tokens. Logits equal the dense-mask version
+    (tests/test_wrapper_padded_attention.py).
 
     Parameters
     ----------
@@ -55,15 +54,10 @@ def run_padded(net: nn.Module, mv: Tensor, batch: Tensor, patch_mv: Tensor = Non
     -------
     logits : Tensor (batchsize, 1)
     """
-    mv_pad, valid = to_dense_batch(mv, batch)                 # (B, L, C, 8), (B, L)
-    mask = torch.zeros(valid.shape, dtype=mv.dtype, device=mv.device)
-    mask = mask.masked_fill(~valid, float("-inf")).unsqueeze(1)   # (B, 1, L)
-    extra = {}
-    if patch_mv is not None:
-        extra["patch_mv"] = to_dense_batch(patch_mv, batch)[0]
-    mv_out, _ = net(mv_pad, scalars=None, attention_mask=mask, **extra)
-    scalars_out = mv_out[..., 0][valid]                      # (n_total, 1), original order
-    batchsize = mv_pad.shape[0]
+    extra = {} if patch_mv is None else {"patch_mv": patch_mv.unsqueeze(0)}
+    mv_out, _ = net(mv.unsqueeze(0), scalars=None, attention_mask=batch, **extra)
+    scalars_out = mv_out[0, :, :, 0]                          # (n_total, 1)
+    batchsize = int(batch.max().item()) + 1
     return scatter(scalars_out, batch, dim=0, dim_size=batchsize, reduce="mean")
 
 
@@ -95,7 +89,7 @@ class TopTaggingWrapper(nn.Module):
         logits : Tensor (batchsize, 1)
         """
         # grade 0 (Spin(3)-invariant) is the classification signal
-        return run_padded(self.net, embedding["mv"], embedding["batch"])
+        return run_grouped(self.net, embedding["mv"], embedding["batch"])
 
 
 class TopTaggingWrapperBivectorPatch(nn.Module):
@@ -126,5 +120,5 @@ class TopTaggingWrapperBivectorPatch(nn.Module):
         -------
         logits : Tensor (batchsize, 1)
         """
-        return run_padded(self.net, embedding["mv"], embedding["batch"],
+        return run_grouped(self.net, embedding["mv"], embedding["batch"],
                           patch_mv=embedding["patch_mv"])
