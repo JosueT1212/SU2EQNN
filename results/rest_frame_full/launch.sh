@@ -1,5 +1,5 @@
 #!/bin/bash
-# Launch the three rest-frame comparison runs on teogpu02, one per A40, each in
+# Launch the two rest-frame runs (beams none / boosted) on teogpu02, one A40 each, each in
 # its own tmux session so a dropped ssh cannot take them down. Same pattern as
 # results/b12_full/launch_lgatrfull.sh. All three run from ONE main commit.
 # Idempotent: refuses to double-launch a session that already exists.
@@ -58,7 +58,6 @@ launch () {  # name config gpu
   echo "LAUNCHED $name gpu=$gpu commit=$COMMIT -> $log"
 }
 
-launch r1_main          top_tagging_r1_full_b12                        1
 launch rest_none        top_tagging_rest_frame_full_b12                2
 launch rest_boosted     top_tagging_rest_frame_boosted_beams_full_b12  3
 
