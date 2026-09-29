@@ -1,4 +1,4 @@
-# config seed — processed top to bottom by the GPU workers (worker.sh).
+# config seed — one SLURM array task per line, in file order (slurm_task.sh).
 # Seed-major: every lab version of the b12 table at seed s before seed s+1,
 # then the two rest-frame versions.
 top_tagging_r1_full_b12 0
