@@ -31,12 +31,14 @@ def dense_reference(model, emb, **extra):
     return scatter(out[0, :, :, 0], emb["batch"], dim=0, dim_size=n_jets, reduce="mean")
 
 
+@pytest.mark.parametrize("multi_query", [True, False])
 @pytest.mark.parametrize("frame,beams", [("lab", "lab"), ("rest", "none"), ("rest", "boosted")])
-def test_padded_matches_dense_mask(frame, beams):
+def test_padded_matches_dense_mask(frame, beams, multi_query):
     c = SimpleNamespace(
         data=SimpleNamespace(embedding="multi_channel", inject=[], two_beams=True,
                              rescale_data=True, frame=frame, beams=beams),
-        model=SimpleNamespace(hidden_mv_channels=8, num_blocks=3, num_heads=4, head_scale=True),
+        model=SimpleNamespace(hidden_mv_channels=8, num_blocks=3, num_heads=4, head_scale=True,
+                              multi_query=multi_query),
     )
     torch.manual_seed(0)
     model = build_model(c).double().eval()

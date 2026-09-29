@@ -48,7 +48,11 @@ class QKVModule(nn.Module):
             ),
         )
         self.norm_mv = EquiLayerNorm()
-        
+        self.norm_s = (
+            nn.LayerNorm(config.hidden_s_channels)
+            if config.in_s_channels is not None else None
+        )
+
     def forward(
         self,
         inputs: torch.Tensor,

@@ -76,6 +76,7 @@ def build_model(cfg) -> TopTaggingWrapper:
         attention=SelfAttentionConfig(
             num_heads=cfg.model.num_heads,
             head_scale=bool(getattr(cfg.model, "head_scale", False)),
+            multi_query=bool(getattr(cfg.model, "multi_query", True)),
         ),
         mlp=MLPConfig(activation="gelu"),
         num_blocks=cfg.model.num_blocks,
@@ -128,7 +129,10 @@ def evaluate(model, loader, cfg, device):
     auc = roc_auc_score(labels, probs)
     preds = (probs > 0.5).astype(int)
     acc = accuracy_score(labels, preds)
-    return {"auc": auc, "accuracy": acc}
+    loss = torch.nn.functional.binary_cross_entropy_with_logits(
+        torch.tensor(logits), torch.tensor(labels, dtype=torch.float32)
+    ).item()
+    return {"auc": auc, "accuracy": acc, "loss": loss}
 
 
 def run_experiment(cfg: DictConfig) -> None:
@@ -163,13 +167,15 @@ def run_experiment(cfg: DictConfig) -> None:
     if optimizer_name == "lion":
         from lion_pytorch import Lion
 
+        betas = tuple(getattr(cfg.training, "betas", None) or (0.9, 0.99))
         optimizer = Lion(
             model.parameters(),
             lr=cfg.training.lr,
+            betas=betas,
             weight_decay=float(getattr(cfg.training, "weight_decay", 0.0)),
         )
         log.info(
-            f"Using Lion optimizer: lr={cfg.training.lr}, "
+            f"Using Lion optimizer: lr={cfg.training.lr}, betas={betas}, "
             f"weight_decay={getattr(cfg.training, 'weight_decay', 0.0)}"
         )
     else:
@@ -202,7 +208,11 @@ def run_experiment(cfg: DictConfig) -> None:
     axis_dropout_p = float(getattr(cfg.training, "axis_dropout_p", 0.0))
     criterion = torch.nn.BCEWithLogitsLoss()
 
-    best_auc = 0.0
+    # "auc": keep the highest val AUC (default); "loss": the lowest val loss, as L-GATr
+    select_by = str(getattr(cfg.training, "select_best_by", "auc"))
+    if select_by not in ("auc", "loss"):
+        raise ValueError(f"select_best_by must be 'auc' or 'loss', got {select_by!r}")
+    best_auc, best_loss = 0.0, float("inf")
     ckpt_path = cfg.training.checkpoint_path
     dirname = os.path.dirname(ckpt_path)
     if dirname:
@@ -239,12 +249,17 @@ def run_experiment(cfg: DictConfig) -> None:
                 metrics = evaluate(model, loader_val, cfg, device)
                 log.info(
                     f"Step {global_step} | val AUC={metrics['auc']:.4f} "
-                    f"acc={metrics['accuracy']:.4f}"
+                    f"acc={metrics['accuracy']:.4f} loss={metrics['loss']:.5f}"
                 )
-                if metrics["auc"] > best_auc:
-                    best_auc = metrics["auc"]
+                improved = (metrics["loss"] < best_loss if select_by == "loss"
+                            else metrics["auc"] > best_auc)
+                if improved:
+                    best_auc, best_loss = metrics["auc"], metrics["loss"]
                     torch.save(model.state_dict(), ckpt_path)
-                    log.info(f"Saved best model (AUC={best_auc:.4f}) to {ckpt_path}")
+                    log.info(
+                        f"Saved best model (by {select_by}: AUC={best_auc:.4f}, "
+                        f"loss={best_loss:.5f}) to {ckpt_path}"
+                    )
                 model.train()
 
         dt = time.time() - t0

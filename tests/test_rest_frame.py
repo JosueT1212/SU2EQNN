@@ -25,7 +25,7 @@ def cfg(frame="rest", beams="none", embedding="multi_channel", inject=()):
             embedding=embedding, inject=list(inject), two_beams=True,
             rescale_data=True, frame=frame, beams=beams,
         ),
-        model=SimpleNamespace(hidden_mv_channels=4, num_blocks=2, num_heads=2),
+        model=SimpleNamespace(hidden_mv_channels=4, num_blocks=2, num_heads=2, multi_query=False),
     )
 
 

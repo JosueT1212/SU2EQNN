@@ -10,6 +10,7 @@ Spin(3) element w lives in Cl^0(3,0) (even subalgebra ≅ quaternions):
 Group action: ρ(w)(x) = w x w^{-1}  (plain conjugation, since w is even)
 """
 
+import pytest
 import torch
 
 from su2eqnn.primitives.bilinear import geometric_product
@@ -330,7 +331,8 @@ def test_rope_scalar_only():
         assert out1.shape == s.shape
 
 
-def test_self_attention_equivariance():
+@pytest.mark.parametrize("multi_query", [True, False])
+def test_self_attention_equivariance(multi_query):
     """Full SelfAttention layer commutes with Spin(3) on MV stream."""
     from su2eqnn.layers.attention.config import SelfAttentionConfig
     from su2eqnn.layers.attention.self_attention import SelfAttention
@@ -343,7 +345,7 @@ def test_self_attention_equivariance():
         out_s_channels=4,
         num_heads=2,
         pos_encoding=False,
-        multi_query=True,
+        multi_query=multi_query,
     )
     layer = SelfAttention(cfg)
     layer.eval()
@@ -368,7 +370,8 @@ def test_self_attention_equivariance():
             f"SelfAttention scalar invariance failed: {(path1_s - out_s).abs().max():.2e}"
 
 
-def test_self_attention_additional_qk_equivariance():
+@pytest.mark.parametrize("multi_query", [True, False])
+def test_self_attention_additional_qk_equivariance(multi_query):
     """SelfAttention with additional_qk_features: V must not be contaminated."""
     from su2eqnn.layers.attention.config import SelfAttentionConfig
     from su2eqnn.layers.attention.self_attention import SelfAttention
@@ -382,7 +385,7 @@ def test_self_attention_additional_qk_equivariance():
         out_s_channels=4,
         num_heads=2,
         additional_qk_mv_channels=ADD_QK,
-        multi_query=True,
+        multi_query=multi_query,
     )
     layer = SelfAttention(cfg)
     layer.eval()
