@@ -18,6 +18,7 @@ if [ ! -f /var/tmp/arivero/toptagging_1M.npz ]; then
   [ "$free_gb" -ge 45 ] || { echo "need ~35 GB in /var/tmp, have ${free_gb} GB"; exit 1; }
   $PY results/scaling/make_subsets.py   # writes *.tmp.npz then renames, so a present file is complete
 fi
+mkdir -p data  # gitignored, absent in a fresh clone
 for tag in 10k 30k 100k 300k 1M; do
   ln -sf /var/tmp/arivero/toptagging_${tag}.npz data/toptagging_${tag}.npz
   ln -sf /var/tmp/arivero/toptagging_${tag}_aux.npz data/toptagging_${tag}_aux.npz
