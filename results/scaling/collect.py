@@ -8,25 +8,23 @@ import re
 import sys
 from pathlib import Path
 
-MODELS = {"top_tagging_r1_full_b12": "baseline_naive",
-          "top_tagging_grade2_bivectors_full_b12": "sencilla_naive",
-          "top_tagging_bivector_patch_full_b12": "patch_naive"}
 SIZES = {"10k": 10_000, "30k": 30_000, "100k": 100_000, "300k": 300_000, "1M": 1_000_000}
-NAME = re.compile(r"(?P<cfg>.+)_(?P<tag>[0-9]+[kM])_seed(?P<seed>[0-9]+)\.log$")
+# model = config name between top_tagging_ and _full_b12, e.g. r1, bivector_patch
+NAME = re.compile(r"top_tagging_(?P<cfg>.+)_full_b12_(?P<tag>[0-9]+[kM])_seed(?P<seed>[0-9]+)\.log$")
 
 
 def collect(log_dir):
     rows, missing = [], []
     for log in sorted(Path(log_dir).glob("*.log")):
         m = NAME.match(log.name)
-        if not m or m["cfg"] not in MODELS:
+        if not m:
             continue
         text = log.read_text()
         auc = re.findall(r"Test AUC=([0-9.]+)", text)
         if "EXIT_STATUS=0" not in text or not auc:
             missing.append(log.name)
             continue
-        rows.append((MODELS[m["cfg"]], SIZES[m["tag"]], int(m["seed"]), float(auc[-1])))
+        rows.append((m["cfg"],SIZES[m["tag"]], int(m["seed"]), float(auc[-1])))
     return rows, missing
 
 

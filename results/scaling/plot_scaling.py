@@ -4,8 +4,9 @@ errorbars plus a ±std band, dashed grid, legend lower right).
 
 Input: long CSV with columns model,size,seed,test_auc (one row per training).
 Four panels: naive/little frame x sencilla (inject once at input) / patch
-(re-inject every block). Each panel shows its own variant against the plain
-baseline of the same frame. A panel with no rows says "pending".
+(re-inject every block). Each panel shows every variant of its kind against the
+plain baseline of the same frame. A panel with no rows says "pending".
+Model names are the config names between top_tagging_ and _full_b12 (collect.py).
 
     python results/scaling/plot_scaling.py scaling.csv scaling.pdf
 """
@@ -18,18 +19,22 @@ import numpy as np
 
 # fixed color + marker per model, so a model looks the same in every panel
 STYLE = {
-    "baseline_naive":  ("Baseline (lab)",         "tab:blue",   "o", "-"),
-    "sencilla_naive":  ("+ bivectors at input",   "tab:orange", "^", "-"),
-    "patch_naive":     ("+ bivector patch",       "tab:green",  "D", "-"),
-    "baseline_little": ("Baseline (rest frame)",  "tab:blue",   "o", "-"),
-    "sencilla_little": ("+ bivectors at input",   "tab:orange", "^", "-"),
-    "patch_little":    ("+ bivector patch",       "tab:green",  "D", "-"),
+    "r1":                      ("Baseline",                       "tab:blue",   "o", "-"),
+    "grade2_bivectors":        ("+ axis bivectors",               "tab:orange", "^", "-"),
+    "subjet_mass":             ("+ subjet masses",                "tab:green",  "s", "-"),
+    "pseudoscalar_triad":      ("+ triad handedness",             "tab:red",    "v", "-"),
+    "pseudoscalar_handedness": ("+ local handedness",             "tab:purple", "P", "-"),
+    "single_channel_axis":     ("jet axis in channel",            "tab:brown",  "X", "-"),
+    "single_channel_axis_b":   ("jet axis in channel + lead ps.", "tab:pink",   "*", "-"),
+    "bivector_patch":          ("+ axis bivectors, patch",        "tab:orange", "D", "--"),
 }
+SENCILLA = ["r1", "grade2_bivectors", "subjet_mass", "pseudoscalar_triad",
+            "pseudoscalar_handedness", "single_channel_axis", "single_channel_axis_b"]
 PANELS = [
-    ("Naive, sencilla", "darkred", ["baseline_naive", "sencilla_naive"]),
-    ("Naive, patch",    "darkred", ["baseline_naive", "patch_naive"]),
-    ("Little group, sencilla", "navy", ["baseline_little", "sencilla_little"]),
-    ("Little group, patch",    "navy", ["baseline_little", "patch_little"]),
+    ("Naive, sencilla", "darkred", SENCILLA),
+    ("Naive, patch",    "darkred", ["r1", "bivector_patch"]),
+    ("Little group, sencilla", "navy", []),  # rest-frame injection not implemented yet
+    ("Little group, patch",    "navy", []),
 ]
 
 
@@ -89,15 +94,15 @@ def demo(out):
     with open(path, "w", newline="") as f:
         w = csv.writer(f)
         w.writerow(["model", "size", "seed", "test_auc"])
-        for i, m in enumerate(["baseline_naive", "sencilla_naive", "patch_naive"]):
-            for s in [10_000, 30_000, 100_000, 300_000, 1_211_000]:
-                for seed in range(5):
+        for i, m in enumerate(STYLE):
+            for s in [10_000, 30_000, 100_000, 300_000, 1_000_000]:
+                for seed in range(3):
                     auc = 0.986 - 0.02 * (1e4 / s) ** 0.5 - 0.001 * i + rng.normal(0, 0.0015 * (1e4 / s) ** 0.3)
                     w.writerow([m, s, seed, f"{auc:.5f}"])
     runs = load(path)
-    assert set(runs["patch_naive"]) == {10_000, 30_000, 100_000, 300_000, 1_211_000}
-    x, y, e, n = stats(runs["patch_naive"])
-    assert n == 5 and (e > 0).all() and list(x) == sorted(x)
+    assert set(runs["bivector_patch"]) == {10_000, 30_000, 100_000, 300_000, 1_000_000}
+    x, y, e, n = stats(runs["bivector_patch"])
+    assert n == 3 and (e > 0).all() and list(x) == sorted(x)
     plot(runs, out)
 
 
