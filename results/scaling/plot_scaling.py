@@ -54,7 +54,7 @@ def stats(by_size):
     return sizes, mean, std, min(len(a) for a in aucs)
 
 
-def plot(runs, out):
+def plot(runs, out, watermark=None):
     fig, axes = plt.subplots(2, 2, figsize=(10, 7.5), sharex=True, sharey=True)
     nseeds = set()
     for ax, (title, tcolor, models) in zip(axes.flat, PANELS):
@@ -83,6 +83,9 @@ def plot(runs, out):
     for ax in axes[:, 0]:
         ax.set_ylabel("AUC")
     fig.tight_layout()
+    if watermark:  # e.g. "MOCK": mock figures must never pass for results
+        fig.text(0.5, 0.5, watermark, ha="center", va="center", rotation=30,
+                 fontsize=90, color="red", alpha=0.15, fontweight="bold")
     fig.savefig(out, bbox_inches="tight")
     print(f"wrote {out}; seeds per point (min): {sorted(nseeds)}")
 
