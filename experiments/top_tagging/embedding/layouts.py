@@ -83,7 +83,7 @@ def patch(fourmomenta, ptr, aux, two_beams=True, rescale=True):
     """Patch layout: plain kinematic mv plus a separate patch_mv wedge stream.
 
     Unlike multi_channel, the wedges are not baked into input channels; they
-    are returned separately for per-block residual re-injection into GATr's
+    are returned separately for per-block residual re-injection into SU2EQNN's
     hidden stream.
     """
     axes = aux.get("axes")

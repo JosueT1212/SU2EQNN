@@ -1,7 +1,7 @@
-"""GATr wrapper for binary jet classification (top tagging).
+"""SU2EQNN wrapper for binary jet classification (top tagging).
 
 Architecture:
-  embed -> GATr -> extract grade-0 from MV output -> mean pool per jet -> logit
+  embed -> SU2EQNN -> extract grade-0 from MV output -> mean pool per jet -> logit
 """
 
 import torch
@@ -35,7 +35,7 @@ def build_attention_mask(batch: Tensor, dtype: torch.dtype) -> Tensor:
 
 
 def run_grouped(net: nn.Module, mv: Tensor, batch: Tensor, patch_mv: Tensor = None) -> Tensor:
-    """Run GATr with attention restricted to each jet; mean-pool grade 0.
+    """Run SU2EQNN with attention restricted to each jet; mean-pool grade 0.
 
     Passes the jet index `batch` as the attention mask: sdp_attention then pads
     the jets into blocks for attention only (cost sum_jets L_max^2 instead of
@@ -45,7 +45,7 @@ def run_grouped(net: nn.Module, mv: Tensor, batch: Tensor, patch_mv: Tensor = No
 
     Parameters
     ----------
-    net      : GATr
+    net      : SU2EQNN
     mv       : Tensor (n_total, C, 8), tokens sorted by jet
     batch    : Tensor (n_total,) jet index per token
     patch_mv : optional Tensor (n_total, K, 8)
@@ -62,11 +62,11 @@ def run_grouped(net: nn.Module, mv: Tensor, batch: Tensor, patch_mv: Tensor = No
 
 
 class TopTaggingWrapper(nn.Module):
-    """GATr + mean-pool head for binary jet classification.
+    """SU2EQNN + mean-pool head for binary jet classification.
 
     Parameters
     ----------
-    net : GATr configured with in_mv_channels=1, out_mv_channels=1,
+    net : SU2EQNN configured with in_mv_channels=1, out_mv_channels=1,
           in_s_channels=None, out_s_channels=None
     """
 
@@ -93,11 +93,11 @@ class TopTaggingWrapper(nn.Module):
 
 
 class TopTaggingWrapperBivectorPatch(nn.Module):
-    """GATr + mean-pool head for bivector patch-injected binary jet classification.
+    """SU2EQNN + mean-pool head for bivector patch-injected binary jet classification.
 
     Parameters
     ----------
-    net : GATr configured with in_mv_channels=1, out_mv_channels=1,
+    net : SU2EQNN configured with in_mv_channels=1, out_mv_channels=1,
           in_s_channels=None, out_s_channels=None, patch_mv_channels=K
     """
 

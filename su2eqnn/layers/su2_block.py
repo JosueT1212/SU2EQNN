@@ -13,7 +13,7 @@ from su2eqnn.layers.mlp.config import MLPConfig
 from su2eqnn.layers.mlp.mlp import GeoMLP
 
 
-class GATrBlock(nn.Module):
+class SU2Block(nn.Module):
     """Spin(3)-equivariant transformer encoder block for Cl(3,0).
 
     Applies: LayerNorm → SelfAttention → residual → LayerNorm → GeoMLP → residual.

@@ -504,17 +504,17 @@ def test_geo_mlp_equivariance():
             f"GeoMLP scalar invariance failed"
 
 
-def test_gatr_block_equivariance():
-    """GATrBlock commutes with Spin(3) on MV stream; scalars are invariant."""
+def test_su2_block_equivariance():
+    """SU2Block commutes with Spin(3) on MV stream; scalars are invariant."""
     from su2eqnn.layers.attention.config import SelfAttentionConfig
     from su2eqnn.layers.mlp.config import MLPConfig
-    from su2eqnn.layers.gatr_block import GATrBlock
+    from su2eqnn.layers.su2_block import SU2Block
 
     ITEMS = 5
     MV_C = 4
     S_C = 8
 
-    block = GATrBlock(
+    block = SU2Block(
         mv_channels=MV_C,
         s_channels=S_C,
         attention=SelfAttentionConfig(num_heads=2, multi_query=True, pos_encoding=False),
@@ -537,21 +537,21 @@ def test_gatr_block_equivariance():
         path2_mv = act(out_mv)
 
         assert torch.allclose(path1_mv, path2_mv, atol=1e-4), \
-            f"GATrBlock MV equivariance failed: {(path1_mv - path2_mv).abs().max():.2e}"
+            f"SU2Block MV equivariance failed: {(path1_mv - path2_mv).abs().max():.2e}"
         assert torch.allclose(path1_s, out_s, atol=1e-4), \
-            f"GATrBlock scalar invariance failed: {(path1_s - out_s).abs().max():.2e}"
+            f"SU2Block scalar invariance failed: {(path1_s - out_s).abs().max():.2e}"
 
 
-def test_gatr_block_no_scalars_equivariance():
-    """GATrBlock without scalar stream commutes with Spin(3); out_s is None."""
+def test_su2_block_no_scalars_equivariance():
+    """SU2Block without scalar stream commutes with Spin(3); out_s is None."""
     from su2eqnn.layers.attention.config import SelfAttentionConfig
     from su2eqnn.layers.mlp.config import MLPConfig
-    from su2eqnn.layers.gatr_block import GATrBlock
+    from su2eqnn.layers.su2_block import SU2Block
 
     ITEMS = 5
     MV_C = 4
 
-    block = GATrBlock(
+    block = SU2Block(
         mv_channels=MV_C,
         s_channels=None,
         attention=SelfAttentionConfig(num_heads=2, multi_query=True, pos_encoding=False),
@@ -575,20 +575,20 @@ def test_gatr_block_no_scalars_equivariance():
         assert out_s is None, "Expected out_s=None when s_channels=None"
         assert path1_s is None
         assert torch.allclose(path1_mv, path2_mv, atol=1e-4), \
-            f"GATrBlock (no scalars) MV equivariance failed: {(path1_mv - path2_mv).abs().max():.2e}"
+            f"SU2Block (no scalars) MV equivariance failed: {(path1_mv - path2_mv).abs().max():.2e}"
 
 
-def test_gatr_equivariance():
-    """GATr (2-block) commutes with Spin(3) on MV stream; scalars are invariant."""
+def test_su2eqnn_equivariance():
+    """SU2EQNN (2-block) commutes with Spin(3) on MV stream; scalars are invariant."""
     from su2eqnn.layers.attention.config import SelfAttentionConfig
     from su2eqnn.layers.mlp.config import MLPConfig
-    from su2eqnn.nets.gatr import GATr
+    from su2eqnn.nets.su2eqnn_net import SU2EQNN
 
     ITEMS   = 5
     IN_MV, OUT_MV, HIDDEN_MV = 4, 2, 4
     IN_S,  OUT_S,  HIDDEN_S  = 8, 4, 8
 
-    net = GATr(
+    net = SU2EQNN(
         in_mv_channels=IN_MV,
         out_mv_channels=OUT_MV,
         hidden_mv_channels=HIDDEN_MV,
@@ -616,9 +616,9 @@ def test_gatr_equivariance():
         path2_mv = act(out_mv)
 
         assert torch.allclose(path1_mv, path2_mv, atol=1e-4), \
-            f"GATr MV equivariance failed: {(path1_mv - path2_mv).abs().max():.2e}"
+            f"SU2EQNN MV equivariance failed: {(path1_mv - path2_mv).abs().max():.2e}"
         assert torch.allclose(path1_s, out_s, atol=1e-4), \
-            f"GATr scalar invariance failed: {(path1_s - out_s).abs().max():.2e}"
+            f"SU2EQNN scalar invariance failed: {(path1_s - out_s).abs().max():.2e}"
 
 
 
@@ -803,7 +803,7 @@ def test_ca_phase_injector_values_and_invariance():
 # below is adapted to the current API: build_embedding(cfg, ...) with embedding="patch", and
 # patch_mv as a returned key (that branch had a standalone
 # embed_tagging_data_bivector_patch function that returned patch_mv
-# directly). The GATr-net-level pair is ported verbatim: su2eqnn.nets.gatr
+# directly). The SU2EQNN-net-level pair is ported verbatim: su2eqnn.nets.su2eqnn_net
 # already exposes patch_mv_channels/patch_mv unchanged from that branch.
 # ---------------------------------------------------------------------------
 
@@ -899,16 +899,16 @@ def test_build_embedding_patch_equivariance():
             f"patch_mv equivariance failed: {(out_rot['patch_mv'][mask] - expected_patch[mask]).abs().max():.2e}"
 
 
-def test_gatr_patch_mv_equivariance():
-    """GATr with patch injection commutes with Spin(3) when momenta AND patch_mv co-rotate."""
+def test_su2eqnn_patch_mv_equivariance():
+    """SU2EQNN with patch injection commutes with Spin(3) when momenta AND patch_mv co-rotate."""
     from su2eqnn.layers.attention.config import SelfAttentionConfig
     from su2eqnn.layers.mlp.config import MLPConfig
-    from su2eqnn.nets.gatr import GATr
+    from su2eqnn.nets.su2eqnn_net import SU2EQNN
 
     ITEMS = 5
     IN_MV, OUT_MV, HIDDEN_MV, PATCH_MV = 1, 1, 4, 4
 
-    net = GATr(
+    net = SU2EQNN(
         in_mv_channels=IN_MV,
         out_mv_channels=OUT_MV,
         hidden_mv_channels=HIDDEN_MV,
@@ -937,7 +937,7 @@ def test_gatr_patch_mv_equivariance():
         path2_mv = act(out_mv)
 
         assert torch.allclose(path1_mv, path2_mv, atol=1e-4), \
-            f"GATr patch equivariance failed: {(path1_mv - path2_mv).abs().max():.2e}"
+            f"SU2EQNN patch equivariance failed: {(path1_mv - path2_mv).abs().max():.2e}"
 
 
 def test_cos_theta_injector_slot_is_rotation_invariant():
@@ -984,22 +984,22 @@ def test_cos_theta_injector_slot_is_rotation_invariant():
 
 
 # ---------------------------------------------------------------------------
-# bivector_patch GATr-net-level patch-pathway tests, ported verbatim from
+# bivector_patch SU2EQNN-net-level patch-pathway tests, ported verbatim from
 # the r7-patch-injection branch (no plumbing change: these already exercised
-# su2eqnn.nets.gatr.GATr directly, not build_embedding, on that branch).
+# su2eqnn.nets.su2eqnn_net.SU2EQNN directly, not build_embedding, on that branch).
 # ---------------------------------------------------------------------------
 
-def test_gatr_patch_mv_none_matches_no_patch():
-    """GATr with patch_mv_channels=None is byte-identical to plain GATr."""
+def test_su2eqnn_patch_mv_none_matches_no_patch():
+    """SU2EQNN with patch_mv_channels=None is byte-identical to plain SU2EQNN."""
     from su2eqnn.layers.attention.config import SelfAttentionConfig
     from su2eqnn.layers.mlp.config import MLPConfig
-    from su2eqnn.nets.gatr import GATr
+    from su2eqnn.nets.su2eqnn_net import SU2EQNN
 
     ITEMS = 5
     IN_MV, OUT_MV, HIDDEN_MV = 1, 1, 4
 
     torch.manual_seed(0)
-    net = GATr(
+    net = SU2EQNN(
         in_mv_channels=IN_MV,
         out_mv_channels=OUT_MV,
         hidden_mv_channels=HIDDEN_MV,
@@ -1020,17 +1020,17 @@ def test_gatr_patch_mv_none_matches_no_patch():
     assert torch.allclose(out_mv_a, out_mv_b, atol=1e-6)
 
 
-def test_gatr_patch_mv_changes_output():
+def test_su2eqnn_patch_mv_changes_output():
     """Nonzero patch_mv perturbs the output; patch_mv=None on a patch-enabled net matches no-patch forward."""
     from su2eqnn.layers.attention.config import SelfAttentionConfig
     from su2eqnn.layers.mlp.config import MLPConfig
-    from su2eqnn.nets.gatr import GATr
+    from su2eqnn.nets.su2eqnn_net import SU2EQNN
 
     ITEMS = 5
     IN_MV, OUT_MV, HIDDEN_MV, PATCH_MV = 1, 1, 4, 4
 
     torch.manual_seed(0)
-    net = GATr(
+    net = SU2EQNN(
         in_mv_channels=IN_MV,
         out_mv_channels=OUT_MV,
         hidden_mv_channels=HIDDEN_MV,
@@ -1053,10 +1053,10 @@ def test_gatr_patch_mv_changes_output():
     out_with_patch, _ = net(x_mv, scalars=None, patch_mv=patch_mv)
 
     assert not torch.allclose(out_no_patch, out_with_patch, atol=1e-6), \
-        "nonzero patch_mv must change GATr output"
+        "nonzero patch_mv must change SU2EQNN output"
 
 
-def test_gatr_patch_proj_zero_preserved_with_nonzero_bias():
+def test_su2eqnn_patch_proj_zero_preserved_with_nonzero_bias():
     """patch_proj must preserve zero-patch-mv -> zero-injection even after training moves its bias.
 
     Spurion tokens carry patch_mv == 0 exactly by design (see
@@ -1069,13 +1069,13 @@ def test_gatr_patch_proj_zero_preserved_with_nonzero_bias():
     """
     from su2eqnn.layers.attention.config import SelfAttentionConfig
     from su2eqnn.layers.mlp.config import MLPConfig
-    from su2eqnn.nets.gatr import GATr
+    from su2eqnn.nets.su2eqnn_net import SU2EQNN
 
     ITEMS = 5
     IN_MV, OUT_MV, HIDDEN_MV, PATCH_MV = 1, 1, 4, 4
 
     torch.manual_seed(0)
-    net = GATr(
+    net = SU2EQNN(
         in_mv_channels=IN_MV,
         out_mv_channels=OUT_MV,
         hidden_mv_channels=HIDDEN_MV,
@@ -1143,16 +1143,16 @@ if __name__ == "__main__":
     test_scalar_gated_nonlinearity_equivariance()
     test_geometric_bilinear_equivariance()
     test_geo_mlp_equivariance()
-    test_gatr_block_equivariance()
-    test_gatr_block_no_scalars_equivariance()
-    test_gatr_equivariance()
+    test_su2_block_equivariance()
+    test_su2_block_no_scalars_equivariance()
+    test_su2eqnn_equivariance()
     test_build_embedding_patch_channels()
     test_build_embedding_patch_equivariance()
-    test_gatr_patch_mv_equivariance()
+    test_su2eqnn_patch_mv_equivariance()
     test_ca_phase_injector_values_and_invariance()
     test_cos_theta_injector_slot_is_rotation_invariant()
-    test_gatr_patch_mv_none_matches_no_patch()
-    test_gatr_patch_mv_changes_output()
-    test_gatr_patch_proj_zero_preserved_with_nonzero_bias()
+    test_su2eqnn_patch_mv_none_matches_no_patch()
+    test_su2eqnn_patch_mv_changes_output()
+    test_su2eqnn_patch_proj_zero_preserved_with_nonzero_bias()
     print("All equivariance tests passed.")
 

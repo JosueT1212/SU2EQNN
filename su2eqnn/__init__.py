@@ -12,5 +12,5 @@ Implemented so far (up to equivariant linear layer):
 Not yet implemented (pending research):
   - Gauge-invariant attention (inner product & encoding)
   - Geometric product layer (bilinear layer in CGENN style)
-  - Full transformer block / GATr-style nets
+  - Full transformer block / SU2EQNN net
 """

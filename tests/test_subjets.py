@@ -102,3 +102,113 @@ def test_leading_momentum_empty_jet():
     kin = np.zeros((200, 4))
     lead = leading_momentum(kin)
     assert np.allclose(lead, [0.0, 0.0, 0.0, 0.0])
+
+
+# --- Durham (e+e- kT) exclusive-3 in the jet rest frame ----------------------
+
+import pytest
+
+from su2eqnn.utils.subjets import _boost_to_rest_np, durham_exclusive_membership
+
+
+def _rest_rows(kin):
+    mask = np.abs(kin).max(axis=-1) > 1e-5
+    p = kin[mask].astype(np.float64)
+    return _boost_to_rest_np(p, p.sum(axis=0)), mask
+
+
+def _random_rotation(seed):
+    q, r = np.linalg.qr(np.random.default_rng(seed).normal(size=(3, 3)))
+    q = q * np.sign(np.diag(r))
+    return q if np.linalg.det(q) > 0 else -q
+
+
+def _three_prong():
+    return _make_jet([((0.15, 0.0, 1.0), 120.0, 8),
+                      ((-0.1, 0.12, 1.0), 90.0, 6),
+                      ((-0.05, -0.15, 1.0), 60.0, 5)])
+
+
+def test_durham_dtype_shape_padding():
+    kin = _three_prong()
+    lab = durham_exclusive_membership(kin)
+    assert lab.dtype == np.int8 and lab.shape == (200,)
+    assert (lab[19:] == -1).all() and set(lab[:19].tolist()) == {0, 1, 2}
+
+
+def test_durham_recovers_prongs():
+    lab = durham_exclusive_membership(_three_prong())
+    for start, stop in ((0, 8), (8, 14), (14, 19)):
+        assert len(set(lab[start:stop].tolist())) == 1
+
+
+def test_durham_labels_ordered_by_rest_energy():
+    kin = _three_prong()
+    lab = durham_exclusive_membership(kin)
+    rest, mask = _rest_rows(kin)
+    e = [rest[lab[mask] == k, 0].sum() for k in range(3)]
+    assert e[0] >= e[1] >= e[2]
+
+
+def test_durham_subjets_sum_to_zero_in_rest_frame():
+    kin = _three_prong()
+    lab = durham_exclusive_membership(kin)
+    rest, mask = _rest_rows(kin)
+    s = np.stack([rest[lab[mask] == k].sum(axis=0) for k in range(3)])
+    m = rest[:, 0].sum()
+    assert np.abs(s[:, 1:].sum(axis=0)).max() <= 1e-9 * m
+
+
+@pytest.mark.parametrize("seed", [0, 1, 2])
+def test_durham_rotation_invariant(seed):
+    kin = _three_prong()
+    lab = durham_exclusive_membership(kin)
+    rest, mask = _rest_rows(kin)
+    R = _random_rotation(seed)
+    rot = np.zeros_like(kin, dtype=np.float64)
+    rot[: mask.sum(), 0] = rest[:, 0]
+    rot[: mask.sum(), 1:] = rest[:, 1:] @ R.T
+    np.testing.assert_array_equal(durham_exclusive_membership(rot)[: mask.sum()], lab[mask])
+
+
+def test_durham_hand_toy_merges_soft_collinear_pair():
+    # rest-frame massless momenta summing to zero; b is soft and 0.1 rad from a
+    a = 10 * np.array([1.0, 0.0, 0.0])
+    b = 1.0 * np.array([np.cos(0.1), np.sin(0.1), 0.0])
+    c = 8 * np.array([-0.5, np.sqrt(3) / 2, 0.0])
+    d = -(a + b + c)
+    kin = np.zeros((200, 4))
+    for i, p in enumerate((a, b, c, d)):
+        kin[i] = [np.linalg.norm(p), *p]
+    lab = durham_exclusive_membership(kin)
+    assert lab[0] == lab[1] and len({lab[0], lab[2], lab[3]}) == 3
+
+
+def test_durham_fewer_than_three_constituents():
+    kin = np.zeros((200, 4))
+    kin[0] = _make_particle((0.1, 0.0, 1.0), 50.0)
+    kin[1] = _make_particle((-0.1, 0.05, 1.0), 40.0)
+    lab = durham_exclusive_membership(kin)
+    assert sorted(lab[:2].tolist()) == [0, 1] and (lab[2:] == -1).all()
+
+
+def test_durham_empty_jet():
+    assert (durham_exclusive_membership(np.zeros((200, 4))) == -1).all()
+
+
+def test_boost_to_rest_np_matches_torch_reference():
+    import torch
+    from experiments.top_tagging.embedding.core import boost_to_rest
+    rng = np.random.default_rng(7)
+    v = rng.normal(size=(30, 4)) * 50
+    p = rng.normal(size=(40, 3)) * 30 + np.array([0.0, 0.0, 400.0])
+    P = np.concatenate([[np.linalg.norm(p, axis=1).sum() + 50.0], p.sum(axis=0)])
+    ref = boost_to_rest(torch.tensor(v), torch.tensor(P)).numpy()
+    np.testing.assert_allclose(_boost_to_rest_np(v, P), ref, rtol=1e-10, atol=1e-8)
+
+
+def test_durham_non_timelike_raises():
+    kin = np.zeros((200, 4))
+    kin[0] = [1.0, 0.0, 0.0, 2.0]   # spacelike: E < |p|
+    with pytest.raises(ValueError, match="non-timelike"):
+        durham_exclusive_membership(kin)

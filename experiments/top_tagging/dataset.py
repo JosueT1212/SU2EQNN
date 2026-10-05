@@ -45,6 +45,10 @@ class TopTaggingDataset(torch.utils.data.Dataset):
             if f"{key}_{mode}" in raw.files
         }
 
+        # per-constituent (not per-jet): Durham labels for frame: rest, masked like x
+        key = f"subjet_idx_{mode}"
+        subjet_idx = raw[key] if key in raw.files else None
+
         self.data_list = []
         for i in range(kinematics.shape[0]):
             # drop zero-padded particles: keep rows where any |component| > EPS
@@ -54,6 +58,9 @@ class TopTaggingDataset(torch.utils.data.Dataset):
             data = Data(x=fourmomenta, label=label)
             for attr, tensor in aux.items():
                 setattr(data, attr, tensor[i].unsqueeze(0))
+            if subjet_idx is not None:
+                data.subjet_idx = torch.from_numpy(
+                    subjet_idx[i][mask.numpy()].astype(np.int64))
             self.data_list.append(data)
 
     def __len__(self):

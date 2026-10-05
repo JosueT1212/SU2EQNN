@@ -11,7 +11,7 @@ CONFIG = Path(__file__).parent.parent / "config"
 REFERENCE = "top_tagging_rest_frame_boosted_beams_full_b12"
 # Keys allowed to differ between variants (the tested factor + bookkeeping).
 VARIANT_KEYS = {
-    "data.path", "data.embedding", "data.inject", "data.frame", "data.beams",
+    "data.path", "data.embedding", "data.inject", "data.frame", "data.beams", "data.beam_reference",
     "model.in_mv_channels", "model.patch_mv_channels", "training.checkpoint_path",
 }
 # L-GATr paper values (lorentz-gatr/config_paper: default, default_tagging,
@@ -35,8 +35,8 @@ def flat(name):
 FULL = sorted(p.stem for p in CONFIG.glob("top_tagging_*_full_b12.yaml"))
 
 
-def test_sweep_has_all_ten_versions():
-    assert len(FULL) == 10
+def test_sweep_has_all_eighteen_versions():
+    assert len(FULL) == 18
 
 
 @pytest.mark.parametrize("name", FULL)

@@ -23,7 +23,7 @@ def kinematics():
 
 
 def test_all_features_registered():
-    assert set(FEATURES) == {"axes", "masses", "phases", "leading"}
+    assert set(FEATURES) == {"axes", "masses", "phases", "leading", "durham"}
 
 
 @pytest.mark.parametrize(

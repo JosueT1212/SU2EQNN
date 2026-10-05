@@ -48,7 +48,7 @@ INJECTORS = {
         channels=AXIS_FIRST4,
         requires_aux=("masses",),
         requires_layout="multi_channel",
-        requires_k=4,
+        requires_k=None,  # width checked in the injector
     ),
     "triad_handedness": Injector(
         name="triad_handedness",
@@ -92,6 +92,15 @@ INJECTORS = {
         requires_aux=("axes",),
         requires_layout="invariant_subjet_axis",
         requires_k=4,
+    ),
+    "plane_normal": Injector(
+        name="plane_normal",
+        fn=injectors.plane_normal,
+        slot=7,
+        channels=AXIS_ALL,
+        requires_aux=("axes",),
+        requires_layout="multi_channel",
+        requires_k=3,
     ),
 }
 

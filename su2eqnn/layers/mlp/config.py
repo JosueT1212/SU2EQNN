@@ -15,7 +15,7 @@ class MLPConfig:
     mv_channels : list of int or None
         Multivector channel sizes per layer, from input to output.
         Must have at least 2 entries when provided. Can be None when used as a
-        template (GATrBlock fills in channels via dataclasses.replace).
+        template (SU2Block fills in channels via dataclasses.replace).
     s_channels : list of int or None
         Scalar channel sizes per layer. If provided, must have same length as mv_channels.
     activation : {"relu", "sigmoid", "gelu"}

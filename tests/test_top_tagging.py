@@ -232,13 +232,13 @@ def test_embed_tagging_data_batch_indices():
 # ---------------------------------------------------------------------------
 
 from experiments.top_tagging.wrapper import build_attention_mask, TopTaggingWrapper
-from su2eqnn.nets.gatr import GATr
+from su2eqnn.nets.su2eqnn_net import SU2EQNN
 from su2eqnn.layers.attention.config import SelfAttentionConfig
 from su2eqnn.layers.mlp.config import MLPConfig
 
 
 def _make_tiny_net():
-    return GATr(
+    return SU2EQNN(
         in_mv_channels=1,
         out_mv_channels=1,
         hidden_mv_channels=4,

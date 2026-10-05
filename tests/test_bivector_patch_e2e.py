@@ -8,7 +8,7 @@ from experiments.top_tagging.embedding import build_embedding
 from experiments.top_tagging.wrapper import TopTaggingWrapperBivectorPatch
 from su2eqnn.layers.attention.config import SelfAttentionConfig
 from su2eqnn.layers.mlp.config import MLPConfig
-from su2eqnn.nets.gatr import GATr
+from su2eqnn.nets.su2eqnn_net import SU2EQNN
 
 
 def _cfg():
@@ -20,7 +20,7 @@ def _cfg():
 
 
 def _build_bivector_patch_model():
-    net = GATr(
+    net = SU2EQNN(
         in_mv_channels=1,
         out_mv_channels=1,
         hidden_mv_channels=8,

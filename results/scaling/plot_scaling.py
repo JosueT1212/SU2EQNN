@@ -13,6 +13,7 @@ Model names are the config names between top_tagging_ and _full_b12 (collect.py)
 import csv
 import sys
 from collections import defaultdict
+from pathlib import Path
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -33,8 +34,8 @@ SENCILLA = ["r1", "grade2_bivectors", "subjet_mass", "pseudoscalar_triad",
 PANELS = [
     ("Naive, sencilla", "darkred", SENCILLA),
     ("Naive, patch",    "darkred", ["r1", "bivector_patch"]),
-    ("Little group, sencilla", "navy", []),  # rest-frame injection not implemented yet
-    ("Little group, patch",    "navy", []),
+    ("Little group, sencilla", "navy", [m + "_little" for m in SENCILLA]),
+    ("Little group, patch",    "navy", ["r1_little", "bivector_patch_little"]),
 ]
 
 
@@ -52,6 +53,142 @@ def stats(by_size):
     mean = np.array([a.mean() for a in aucs])
     std = np.array([a.std(ddof=1) if len(a) > 1 else 0.0 for a in aucs])
     return sizes, mean, std, min(len(a) for a in aucs)
+
+
+PAIR_TITLES = {  # one panel per variant, baseline vs variant (Li et al. Fig. 4 layout)
+    "grade2_bivectors":        "Subjet-axis bivectors (sencilla)",
+    "bivector_patch":          "Subjet-axis bivectors (patch)",
+    "subjet_mass":             "Subjet masses",
+    "pseudoscalar_triad":      "Triad handedness",
+    "pseudoscalar_handedness": "Local handedness",
+    "single_channel_axis":     "Jet axis in channel",
+    "single_channel_axis_b":   "Jet axis in channel + lead pseudoscalar",
+}
+LI_RC = {"font.family": "serif", "font.serif": ["Times New Roman", "STIXGeneral", "DejaVu Serif"],
+         "mathtext.fontset": "stix", "font.size": 11}
+
+
+def _li_axis(ax, title, ticks):
+    ax.set_title(title, loc="left", color="#8B1A1A", fontweight="bold", fontsize=14)
+    ax.grid(True, ls="--", lw=0.8, color="0.6")
+    ax.set_xscale("log")
+    ax.set_xticks(ticks, [f"{t:d}" for t in ticks])
+    ax.minorticks_off()
+    ax.set_xlabel("Training sample size")
+    ax.set_ylabel("AUC")
+
+
+def _li_curve(ax, by_size, label, color):
+    x, y, e, _ = stats(by_size)
+    ax.fill_between(x, y - e, y + e, color=color, alpha=0.2, lw=0)
+    ax.errorbar(x, y, yerr=e, color=color, fmt="-", lw=1.8, elinewidth=1.8, capsize=0,
+                label=label)
+
+
+def plot_pairs(runs, outdir, baseline="r1"):
+    """Li et al. style: one panel per variant against the baseline, shared y-range.
+
+    Writes pairs.pdf/.png (all panels) and pair_<variant>.png (one per panel).
+    """
+    outdir = Path(outdir)
+    variants = [m for m in PAIR_TITLES if m in runs]
+    ticks = sorted({s for m in runs.values() for s in m})
+    lo = min(stats(runs[m])[1].min() - stats(runs[m])[2].max() for m in [baseline, *variants])
+    hi = max(stats(runs[m])[1].max() + stats(runs[m])[2].max() for m in [baseline, *variants])
+    ylim = (lo - 0.0005, hi + 0.0005)
+    with plt.rc_context(LI_RC):
+        ncol = 2
+        nrow = -(-len(variants) // ncol)
+        fig, axes = plt.subplots(nrow, ncol, figsize=(13, 4.6 * nrow), squeeze=False)
+        for ax in axes.flat[len(variants):]:
+            ax.set_visible(False)
+        for ax, m in zip(axes.flat, variants):
+            _li_axis(ax, PAIR_TITLES[m], ticks)
+            _li_curve(ax, runs[baseline], "Baseline", "tab:blue")
+            _li_curve(ax, runs[m], f"+ {PAIR_TITLES[m].lower()}", "tab:orange")
+            ax.set_ylim(*ylim)
+            ax.legend(loc="lower right", fontsize=11, framealpha=0.9)
+        fig.tight_layout()
+        for ext in ("pdf", "png"):
+            fig.savefig(outdir / f"pairs.{ext}", bbox_inches="tight", dpi=200)
+        plt.close(fig)
+        for m in variants:  # single panels
+            fig, ax = plt.subplots(figsize=(6.5, 4.6))
+            _li_axis(ax, PAIR_TITLES[m], ticks)
+            _li_curve(ax, runs[baseline], "Baseline", "tab:blue")
+            _li_curve(ax, runs[m], f"+ {PAIR_TITLES[m].lower()}", "tab:orange")
+            ax.set_ylim(*ylim)
+            ax.legend(loc="lower right", fontsize=11, framealpha=0.9)
+            fig.tight_layout()
+            fig.savefig(outdir / f"pair_{m}.png", bbox_inches="tight", dpi=200)
+            plt.close(fig)
+    print(f"wrote {outdir}/pairs.pdf/.png and {len(variants)} single panels")
+
+
+FOUR = [  # (file stem, title, colour, models): one PNG per panel, Li et al. style, no grid
+    ("naive_input", "Naive, input injection", "#8B1A1A", SENCILLA),
+    ("naive_patch", "Naive, patch injection", "#8B1A1A", ["r1", "bivector_patch"]),
+    ("little_group_input", "Little group, input injection", "#1F3A8A",
+     [m + "_little" for m in SENCILLA]),
+    ("little_group_patch", "Little group, patch injection", "#1F3A8A", ["r1_little", "bivector_patch_little"]),
+]
+LITTLE_LABELS = {  # rest-frame ports; e/f/g are analogs, not the same observables
+    "r1": "Baseline", "grade2_bivectors": "+ subjet-axis bivectors",
+    "subjet_mass": "+ subjet masses", "pseudoscalar_handedness": "+ local handedness",
+    "pseudoscalar_triad": "+ out-of-plane pseudoscalar",
+    "single_channel_axis": "leading subjet in channel",
+    "single_channel_axis_b": "leading subjet in channel + lead ps.",
+    "bivector_patch": "+ subjet-axis bivectors, patch",
+}
+for _m, _label in LITTLE_LABELS.items():
+    STYLE[_m + "_little"] = (_label, *STYLE[_m][1:])
+FOUR_COLORS = {"r1": "tab:blue", "grade2_bivectors": "tab:orange", "subjet_mass": "tab:green",
+               "pseudoscalar_triad": "tab:red", "pseudoscalar_handedness": "tab:purple",
+               "single_channel_axis": "tab:brown", "single_channel_axis_b": "tab:pink",
+               "bivector_patch": "tab:orange"}
+
+
+def plot_four(runs, outdir):
+    """Four PNGs (naive/little group x input/patch injection), shared y-range, no grid.
+
+    Curves in a crowded panel are dodged a few percent along log-x so error bars
+    do not sit on top of each other; a panel without data says "pending".
+    """
+    outdir = Path(outdir)
+    ticks = sorted({s for m in runs.values() for s in m})
+    present = [m for m in STYLE if m in runs]
+    lo = min(stats(runs[m])[1].min() - stats(runs[m])[2].max() for m in present)
+    hi = max(stats(runs[m])[1].max() + stats(runs[m])[2].max() for m in present)
+    with plt.rc_context(LI_RC):
+        for stem, title, tcolor, models in FOUR:
+            fig, ax = plt.subplots(figsize=(6.5, 4.8))
+            ax.set_xscale("log")
+            ax.set_xticks(ticks, [f"{t:d}" for t in ticks])
+            ax.minorticks_off()
+            ax.set_xlabel("Training sample size", fontsize=18)
+            ax.set_ylabel("AUC", fontsize=18)
+            ax.set_ylim(lo - 0.0005, hi + 0.0005)
+            models = [m for m in models if m in runs]
+            if not models:
+                ax.set_xlim(ticks[0] / 1.5, ticks[-1] * 1.5)
+                ax.text(0.5, 0.5, "pending", transform=ax.transAxes, ha="center",
+                        va="center", color="0.5", fontsize=14)
+            for k, m in enumerate(models):
+                x, y, e, _ = stats(runs[m])
+                x = x * 1.035 ** (k - (len(models) - 1) / 2)   # dodge
+                c = FOUR_COLORS[m.removesuffix("_little")]
+                ax.fill_between(x, y - e, y + e, color=c, alpha=0.12, lw=0)
+                ax.errorbar(x, y, yerr=e, color=c, fmt="-", lw=1.8, elinewidth=1.6,
+                            capsize=0, label=STYLE[m][0])
+            if models:
+                leg = ax.legend(loc="lower right", fontsize=10, framealpha=0.9, title=title,
+                                title_fontproperties={"weight": "bold", "size": 11})
+                leg.get_title().set_color("black")
+                leg._legend_box.align = "left"
+            fig.tight_layout()
+            fig.savefig(outdir / f"{stem}.png", bbox_inches="tight", dpi=200)
+            plt.close(fig)
+    print(f"wrote {len(FOUR)} PNGs to {outdir}")
 
 
 def plot(runs, out, watermark=None):

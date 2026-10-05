@@ -8,15 +8,21 @@ safe.
 Usage:
     .venv/bin/python scripts/precompute_features.py \
         --features axes,masses data/toptagging_mini.npz data/toptagging_mini_aux.npz
+
+Rest-frame Durham labels (little-group runs), on the cluster:
+    python scripts/precompute_features.py --features durham \
+        /var/tmp/arivero/toptagging_full.npz /var/tmp/arivero/toptagging_full_durham.npz
 """
 
 import argparse
+import multiprocessing
+import os
 
 import numpy as np
 
 from su2eqnn.utils.catree import ca_hard_branch_phases
 from su2eqnn.utils.subjets import (
-    exclusive_kt_subjets, jet_axis, jet_mass, leading_momentum,
+    durham_exclusive_membership, exclusive_kt_subjets, jet_axis, jet_mass, leading_momentum,
 )
 
 N_SUBJETS = 3
@@ -69,12 +75,28 @@ def _compute_leading(kinematics: np.ndarray) -> np.ndarray:
     return out
 
 
+def _compute_durham(kinematics: np.ndarray) -> np.ndarray:
+    """(N, 200, 4) -> (N, 200) int8 Durham exclusive-3 labels in the jet rest frame.
+
+    -1 on padding rows. Parallel over jets: SLURM_CPUS_PER_TASK workers on the
+    cluster, all local cores otherwise.
+    """
+    workers = int(os.environ.get("SLURM_CPUS_PER_TASK", os.cpu_count() or 1))
+    with multiprocessing.Pool(workers) as pool:
+        rows = pool.map(durham_exclusive_membership, kinematics, chunksize=1000)
+    out = np.stack(rows)
+    few = int(((out >= 0).sum(axis=1) < N_SUBJETS).sum())
+    print(f"  {len(out)} jets, {few} with < {N_SUBJETS} constituents", flush=True)
+    return out
+
+
 # feature name -> (compute fn, npz key prefix)
 FEATURES = {
     "axes":    (_compute_axes,    "axes"),
     "masses":  (_compute_masses,  "masses"),
     "phases":  (_compute_phases,  "phases"),
     "leading": (_compute_leading, "p_lead"),
+    "durham":  (_compute_durham,  "subjet_idx"),
 }
 
 

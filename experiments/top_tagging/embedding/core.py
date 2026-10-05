@@ -67,6 +67,78 @@ def rest_frame_beams(P: Tensor, two_beams: bool, dtype) -> Tensor:
     return tokens.to(dtype)
 
 
+def rest_frame_xyplane(P: Tensor, dtype) -> Tensor:
+    """The xy-plane bivector gamma1 gamma2 (L-GATr beam_reference "xyplane") seen from
+    each jet's rest frame, (batchsize, 1, 8).
+
+    F^{xy} = -F^{yx} = 1 transforms as F' = L F L^T with L = L(P)^-1, built column
+    by column from boost_to_rest. Rest-frame split with the connector table (even
+    half, D = diag(1,-1,...,-1,+1)): electric part F'^{0i} -> -e_i (slots 1-3),
+    magnetic part F'^{xy,xz,yz} -> -e12, -e13, -e23 (slots 4-6). F is fixed by
+    z-boosts and z-rotations, so the token is exactly covariant under them. Its
+    Euclidean norm sqrt(cosh 2y_T) grows with the jet's transverse rapidity
+    (sinh y_T = p_T/m), so it is scaled to unit norm like the null beams; p_T/m stays
+    readable as |E|/|B| = tanh y_T. No time token: L(P)^-1 gamma0 would hand the head
+    the jet's lab velocity.
+    """
+    n_jets = P.shape[0]
+    eye = torch.eye(4, dtype=torch.float64, device=P.device).expand(n_jets, 4, 4)
+    L = boost_to_rest(eye, P.double().unsqueeze(1)).transpose(1, 2)   # L[:, :, b] = L e_b
+    F = torch.zeros(4, 4, dtype=torch.float64, device=P.device)
+    F[1, 2], F[2, 1] = 1.0, -1.0
+    Fp = L @ F @ L.transpose(1, 2)
+    tokens = torch.zeros(n_jets, 1, 8, dtype=torch.float64, device=P.device)
+    tokens[:, 0, 1:4] = -Fp[:, 0, 1:4]
+    tokens[:, 0, 4] = -Fp[:, 1, 2]
+    tokens[:, 0, 5] = -Fp[:, 1, 3]
+    tokens[:, 0, 6] = -Fp[:, 2, 3]
+    tokens = tokens / tokens.norm(dim=-1, keepdim=True)   # |E|^2+|B|^2 = cosh 2y_T >= 1
+    return tokens.to(dtype)
+
+
+def rest_subjets(x_rest: Tensor, ptr: Tensor, subjet_idx: Tensor, k: int = 3) -> dict:
+    """Rest-frame Durham subjets from per-constituent labels, all float64.
+
+    Parameters
+    ----------
+    x_rest     : (n_particles, 4) constituents already boosted with L(P)^-1, float64
+    ptr        : (batchsize+1,) cumulative particle counts per jet
+    subjet_idx : (n_particles,) long labels 0..k-1 (scripts/precompute_features.py --features durham)
+
+    Returns
+    -------
+    dict with
+      "axes"   (B, k, 3): unit spatial direction of each subjet; zero for an empty subjet
+               (a fixed fallback direction would act as a spurion in the rest frame),
+      "masses" (B, k):    sqrt(max(p_s^2, 0)) in GeV,
+      "p_lead" (B, 4):    the constituent with the highest rest-frame energy.
+    Summing after the boost makes every output follow the constituents under any
+    Lorentz transformation: the subjets rotate by the same Wigner rotation.
+    """
+    if (subjet_idx < 0).any() or (subjet_idx >= k).any():
+        raise ValueError(
+            f"subjet_idx outside 0..{k - 1}: padding/mask mismatch between the "
+            "precomputed labels and the dataset"
+        )
+    batch = get_batch_from_ptr(ptr)
+    n_jets = len(ptr) - 1
+    S = torch.zeros(n_jets * k, 4, dtype=torch.float64, device=x_rest.device)
+    S = S.index_add_(0, batch * k + subjet_idx, x_rest.double()).view(n_jets, k, 4)
+    p3 = S[..., 1:]
+    norm = p3.norm(dim=-1, keepdim=True)
+    axes = torch.where(norm > 1e-9, p3 / norm.clamp_min(1e-9), torch.zeros_like(p3))
+    masses = torch.sqrt((S[..., 0] ** 2 - (p3 ** 2).sum(-1)).clamp_min(0.0))
+
+    E = x_rest[:, 0].double()
+    e_max = torch.full((n_jets,), -torch.inf, dtype=torch.float64, device=E.device)
+    e_max = e_max.scatter_reduce(0, batch, E, "amax")
+    is_max = E == e_max[batch]
+    pos = torch.arange(len(E), device=E.device)
+    first = torch.full((n_jets,), len(E), dtype=torch.long, device=E.device)
+    first = first.scatter_reduce(0, batch[is_max], pos[is_max], "amin")
+    return {"axes": axes, "masses": masses, "p_lead": x_rest.double()[first]}
+
+
 def random_z_boost(fourmomenta: Tensor, ptr: Tensor, max_rapidity: float,
                    generator: torch.Generator) -> Tensor:
     """Boost each jet along z by a rapidity drawn from U[-max_rapidity, max_rapidity].

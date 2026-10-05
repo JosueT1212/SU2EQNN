@@ -1,4 +1,4 @@
-"""Top quark jet tagging experiment using GATr on Cl(3,0).
+"""Top quark jet tagging experiment using SU2EQNN on Cl(3,0).
 
 Entry point:
     python -m experiments.top_tagging.experiment
@@ -16,7 +16,7 @@ from omegaconf import DictConfig
 from torch_geometric.loader import DataLoader as GeometricDataLoader
 from sklearn.metrics import roc_auc_score, accuracy_score
 
-from su2eqnn.nets.gatr import GATr
+from su2eqnn.nets.su2eqnn_net import SU2EQNN
 from su2eqnn.layers.attention.config import SelfAttentionConfig
 from su2eqnn.layers.mlp.config import MLPConfig
 from experiments.top_tagging.dataset import TopTaggingDataset
@@ -42,7 +42,7 @@ def set_seed(seed) -> None:
     log.info(f"Seeded RNGs with seed={seed}")
 
 
-AUX_ATTRS = ("axes", "masses", "phases", "p_lead")
+AUX_ATTRS = ("axes", "masses", "phases", "p_lead", "subjet_idx")
 
 
 def collect_aux(batch) -> dict:
@@ -55,7 +55,7 @@ def collect_aux(batch) -> dict:
 
 
 def build_model(cfg) -> TopTaggingWrapper:
-    """Instantiate GATr + TopTaggingWrapper from config.
+    """Instantiate SU2EQNN + TopTaggingWrapper from config.
 
     Parameters
     ----------
@@ -66,7 +66,7 @@ def build_model(cfg) -> TopTaggingWrapper:
         in_mv_channels     : int (optional, default 1)
     """
     patch_mv_channels = getattr(cfg.model, "patch_mv_channels", None)
-    net = GATr(
+    net = SU2EQNN(
         in_mv_channels=getattr(cfg.model, "in_mv_channels", 1),
         out_mv_channels=1,
         hidden_mv_channels=cfg.model.hidden_mv_channels,
@@ -111,9 +111,10 @@ def evaluate(model, loader, cfg, device):
             if generator is None:
                 embedding = build_embedding(cfg, batch.x, batch.ptr, aux)
             else:
-                if aux:
+                lab_aux = sorted(k for k in aux if k != "subjet_idx")
+                if lab_aux:
                     raise ValueError(
-                        f"random_boost_rapidity with lab-frame aux keys {sorted(aux)}: "
+                        f"random_boost_rapidity with lab-frame aux keys {lab_aux}: "
                         "the aux features would not be boosted"
                     )
                 x = random_z_boost(batch.x, batch.ptr, max_rapidity, generator)

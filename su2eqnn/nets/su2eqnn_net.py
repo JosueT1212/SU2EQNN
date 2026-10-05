@@ -8,15 +8,15 @@ from torch import nn
 from torch.utils.checkpoint import checkpoint
 
 from su2eqnn.layers.attention.config import SelfAttentionConfig
-from su2eqnn.layers.gatr_block import GATrBlock
+from su2eqnn.layers.su2_block import SU2Block
 from su2eqnn.layers.linear import EquiLinear
 from su2eqnn.layers.mlp.config import MLPConfig
 
 
-class GATr(nn.Module):
+class SU2EQNN(nn.Module):
     """Spin(3)-equivariant transformer for Cl(3,0) multivector data.
 
-    Stacks `num_blocks` GATrBlocks with initial and final EquiLinear projections.
+    Stacks `num_blocks` SU2Blocks with initial and final EquiLinear projections.
 
     Input shape:  (..., items, in_mv_channels, 8)
     Output shape: (..., items, out_mv_channels, 8)
@@ -33,7 +33,7 @@ class GATr(nn.Module):
     attention : SelfAttentionConfig
         Template; channels and additional_qk_*_channels filled in here.
     mlp : MLPConfig
-        Template; channels filled in by each GATrBlock.
+        Template; channels filled in by each SU2Block.
     num_blocks : int
     reinsert_mv_channels : tuple of int or None
         Indices of input MV channels to re-inject as additional Q/K features in every block.
@@ -41,7 +41,7 @@ class GATr(nn.Module):
     reinsert_s_channels : tuple of int or None
         Indices of input scalar channels to re-inject as additional Q/K features in every block.
     patch_mv_channels : int or None
-        When set, GATr owns one EquiLinear(patch_mv_channels -> hidden_mv_channels)
+        When set, SU2EQNN owns one EquiLinear(patch_mv_channels -> hidden_mv_channels)
         per block and adds its output to the hidden multivector stream immediately
         before each block runs (Li et al. 2208.07814-style patch structure, adapted
         to be Spin(3)-equivariant). None disables the pathway entirely.
@@ -93,7 +93,7 @@ class GATr(nn.Module):
         mlp = MLPConfig.cast(mlp)
 
         self.blocks = nn.ModuleList([
-            GATrBlock(
+            SU2Block(
                 mv_channels=hidden_mv_channels,
                 s_channels=hidden_s_channels,
                 attention=attention,

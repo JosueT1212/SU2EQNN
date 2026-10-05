@@ -12,15 +12,21 @@ from experiments.top_tagging.embedding.core import UNITS
 
 
 def subjet_mass(mv, fourmomenta, ptr, particle_batch, aux, rescale) -> None:
-    """Broadcast [m_jet, m_s1..s3] into slot 0 of channels 1-4.
+    """Broadcast the M aux masses into slot 0 of axis channels 1..M.
 
-    Masses arrive in GeV and are divided by UNITS when rescale is set, the
-    same convention as the momenta in channel 0.
+    Lab: M = 4, [m_jet, m_s1..s3] on channels 1-4. Rest frame: M = 3, the Durham
+    subjet masses (m_jet is Gram-determined from channel 0 and dropped). Masses
+    arrive in GeV and are divided by UNITS when rescale is set, the same
+    convention as the momenta in channel 0.
     """
     masses = aux["masses"].to(mv.dtype)
+    if masses.shape[1] != mv.shape[1] - 1:
+        raise ValueError(
+            f"subjet_mass: {masses.shape[1]} masses for {mv.shape[1] - 1} axis channels"
+        )
     if rescale:
         masses = masses / UNITS
-    mv[:, 1:5, 0] = masses[particle_batch]
+    mv[:, 1:1 + masses.shape[1], 0] = masses[particle_batch]
 
 
 def triad_handedness(mv, fourmomenta, ptr, particle_batch, aux, rescale) -> None:
@@ -133,3 +139,21 @@ def cos_theta(mv, fourmomenta, ptr, particle_batch, aux, rescale) -> None:
     p_norm = p.norm(dim=-1).clamp_min(1e-12)
     ax_highest = aux["axes"][:, 1, :].to(mv.dtype)[particle_batch]
     mv[:, 0, 4] = (p * ax_highest).sum(dim=-1) / p_norm
+
+
+def plane_normal(mv, fourmomenta, ptr, particle_batch, aux, rescale) -> None:
+    """Out-of-decay-plane pseudoscalar into slot 7 of axis channels 1-3 (frame: rest).
+
+    Channel k carries p⃗·(n̂_k × n̂_{k+1 mod 3}), the rest-frame port of
+    triad_handedness's per-particle p⃗·(n̂_jet × n̂_k): the jet axis is zero in the
+    rest frame and the jet-level triad (n̂1×n̂2)·n̂3 is identically zero (subjets sum
+    to zero, so their axes are coplanar). Each cross product is normal to the decay
+    plane, so the three channels are proportional per jet (factor sin θ_k,k+1).
+    Momenta are rescaled by UNITS when `rescale` is set, like triad_handedness.
+    """
+    p3 = fourmomenta[:, 1:4].to(mv.dtype)
+    if rescale:
+        p3 = p3 / UNITS
+    ax = aux["axes"].to(mv.dtype)                                   # (B, 3, 3)
+    normals = torch.linalg.cross(ax, ax.roll(-1, dims=1), dim=-1)   # n_k x n_{k+1}
+    mv[:, 1:4, 7] = torch.einsum("nd,nkd->nk", p3, normals[particle_batch])
