@@ -21,7 +21,7 @@ case $tag in 10k) n=10000;; 30k) n=30000;; 100k) n=100000;; 300k) n=300000;; 1M)
 # baselines read kinematics only (aux keys would add axis channels); naive variants the lab
 # aux file; little-group variants the rest-frame Durham labels
 case $cfg in
-  top_tagging_r1_full_b12|top_tagging_rest_xyplane_full_b12) data=data/toptagging_${tag}.npz ;;
+  top_tagging_r1_full_b12|top_tagging_r1_xyplane_full_b12|top_tagging_rest_xyplane_full_b12) data=data/toptagging_${tag}.npz ;;
   top_tagging_rest_*) data=data/toptagging_${tag}_durham.npz ;;
   *) data=data/toptagging_${tag}_aux.npz ;;
 esac

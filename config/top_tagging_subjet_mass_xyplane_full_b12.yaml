@@ -1,0 +1,39 @@
+# Naive (lab-frame) partner of the little-group runs: top_tagging_subjet_mass_full_b12 with the
+# xy-plane spurion (fixed -e12) instead of the +-e3 beams. Only the spurion differs.
+data:
+  path: data/toptagging_full_aux.npz
+  rescale_data: true
+  two_beams: true
+  beam_reference: xyplane
+  embedding: multi_channel
+  inject: [subjet_mass]
+
+model:
+  in_mv_channels: 5
+  hidden_mv_channels: 16
+  num_blocks: 12
+  num_heads: 8
+  head_scale: true
+  multi_query: false
+
+training:
+  seed: 0
+  epochs: 21
+  batch_size: 128
+  lr: 0.0003
+  validate_every_n_steps: 5000
+  select_best_by: loss
+  checkpoint_path: checkpoints/top_tagging_subjet_mass_xyplane_full_b12.pt
+  axis_dropout_p: 0.0
+  scheduler: cosine
+  scheduler_t0_steps: 198702
+  eta_min: 0.0
+  optimizer: lion
+  weight_decay: 0.2
+  betas: [0.9, 0.999]
+  clip_grad_norm: 5
+
+evaluation:
+  batch_size: 256
+  random_boost_rapidity: 0.0
+  boost_seed: 0

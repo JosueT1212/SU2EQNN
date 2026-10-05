@@ -489,6 +489,7 @@ def test_xyplane_guards():
     with pytest.raises(ValueError, match="beams: boosted"):
         build_embedding(c, x, ptr, {})
     c = cfg("lab", "lab")
-    c.data.beam_reference = "xyplane"
+    c.data.beam_reference = "xyplane"      # lab xyplane is allowed (fixed -e12, test_lab_xyplane)
+    c.data.beams = "boosted"
     with pytest.raises(ValueError, match="frame: rest"):
         build_embedding(c, x, ptr, {})

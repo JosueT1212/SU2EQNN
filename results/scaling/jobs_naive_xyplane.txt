@@ -1,0 +1,10 @@
+# config size seed — naive (lab) partners of the little-group runs with the xy-plane spurion.
+# Official paper runs: tag full -> ~/official_paper_logs/seed_0/, checkpoints/seed_0/.
+top_tagging_r1_xyplane_full_b12 full 0
+top_tagging_grade2_bivectors_xyplane_full_b12 full 0
+top_tagging_bivector_patch_xyplane_full_b12 full 0
+top_tagging_subjet_mass_xyplane_full_b12 full 0
+top_tagging_pseudoscalar_handedness_xyplane_full_b12 full 0
+top_tagging_pseudoscalar_triad_xyplane_full_b12 full 0
+top_tagging_single_channel_axis_xyplane_full_b12 full 0
+top_tagging_single_channel_axis_b_xyplane_full_b12 full 0

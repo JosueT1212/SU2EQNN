@@ -34,8 +34,9 @@ def build_embedding(cfg, fourmomenta, ptr, aux) -> dict:
            ("lab" | "none" | "boosted"). frame: rest boosts every jet to its
            rest frame with L(P)^-1 before embedding (little-group
            canonicalization); it needs beams none or boosted.
-           cfg.data.beam_reference ("lightlike" default | "xyplane", frame: rest
-           with beams: boosted only) picks the boosted beam token(s).
+           cfg.data.beam_reference ("lightlike" default | "xyplane") picks the beam
+           token(s): frame: rest boosts them (beams: boosted); frame: lab with
+           xyplane uses the fixed unit bivector -e12 in place of the +-e3 pair.
     fourmomenta : (n_particles, 4) sparse, zero-padded rows already removed
     ptr         : (batchsize+1,) cumulative particle counts per jet
     aux         : dict of per-jet tensors — "axes", "masses", "phases", "p_lead" (lab),
@@ -86,10 +87,15 @@ def build_embedding(cfg, fourmomenta, ptr, aux) -> dict:
         raise ValueError(f"unknown frame {frame!r}; known: 'lab', 'rest'")
     elif beams != "lab":
         raise ValueError(f"beams {beams!r} requires frame: rest; frame: lab uses beams: lab")
-    elif beam_reference is not None:
-        raise ValueError(f"beam_reference {beam_reference!r} is a frame: rest option")
+    elif beam_reference not in (None, "lightlike", "xyplane"):
+        raise ValueError(f"unknown beam_reference {beam_reference!r}")
     elif aux.get("subjet_idx") is not None:
         raise ValueError("subjet_idx (rest-frame Durham labels) requires frame: rest")
+    if frame == "lab" and beam_reference == "xyplane":
+        # The same unit xy-plane token with no boost (jet at rest): -e12, fixed.
+        rest = fourmomenta.new_zeros(len(ptr) - 1, 4)
+        rest[:, 0] = 1.0
+        tokens = rest_frame_xyplane(rest, fourmomenta.dtype)
     check_aux(chosen, aux, layout_name)
 
     mv, extras = layout_fn(fourmomenta, ptr, aux, two_beams, rescale)
