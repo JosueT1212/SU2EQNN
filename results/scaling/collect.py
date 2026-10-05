@@ -24,6 +24,11 @@ LITTLE = {
     "rest_durham_plane_normal": "pseudoscalar_triad_little",
     "rest_durham_single_channel": "single_channel_axis_little",
     "rest_durham_single_channel_b": "single_channel_axis_b_little",
+    "rest_durham_masses_patch": "subjet_mass_patch_little",
+    "rest_durham_handedness_patch": "pseudoscalar_handedness_patch_little",
+    "rest_durham_plane_normal_patch": "pseudoscalar_triad_patch_little",
+    "rest_durham_single_channel_patch": "single_channel_axis_patch_little",
+    "rest_durham_single_channel_b_patch": "single_channel_axis_b_patch_little",
 }
 
 
@@ -40,11 +45,23 @@ def collect(log_dir):
             continue
         # "full" = the whole training set: its size comes from the N= header slurm_task.sh writes
         size = SIZES[m["tag"]] if m["tag"] in SIZES else int(re.search(r"\bN=(\d+)", text)[1])
-        rows.append((LITTLE.get(m["cfg"], m["cfg"]), size, int(m["seed"]), float(auc[-1])))
+        name = m["cfg"] if m["cfg"].startswith("rest_") else m["cfg"].removesuffix("_xyplane")
+        rows.append((LITTLE.get(name, name), size, int(m["seed"]), float(auc[-1])))
     return rows, missing
 
 
 FULL_NAME = re.compile(r"top_tagging_(?P<cfg>.+)_full_b12\.log$")
+
+
+def official_full_name(cfg):
+    """Paper name of a full-dataset config, or None if it is not an official run.
+
+    Naive official runs use the xy-plane spurion (<v>_xyplane configs) and take the
+    standard naive name <v>; naive +-e3 full runs are not official. Little group: LITTLE.
+    """
+    if cfg.startswith("rest_"):
+        return LITTLE.get(cfg, cfg)
+    return cfg.removesuffix("_xyplane") if cfg.endswith("_xyplane") else None
 
 
 def collect_full(root):
@@ -53,7 +70,7 @@ def collect_full(root):
     for log in sorted(Path(root).glob("seed_*/top_tagging_*_full_b12.log")):
         m = FULL_NAME.match(log.name)
         text = log.read_text()
-        if not m or "TAG=full" not in text.split("\n", 1)[0]:
+        if not m or "TAG=full" not in text.split("\n", 1)[0] or official_full_name(m["cfg"]) is None:
             continue
         auc = re.findall(r"Test AUC=([0-9.]+)", text)
         if "EXIT_STATUS=0" not in text or not auc:
@@ -61,7 +78,7 @@ def collect_full(root):
             continue
         size = int(re.search(r"\bN=(\d+)", text)[1])
         seed = int(log.parent.name.removeprefix("seed_"))
-        rows.append((LITTLE.get(m["cfg"], m["cfg"]), size, seed, float(auc[-1])))
+        rows.append((official_full_name(m["cfg"]), size, seed, float(auc[-1])))
     return rows, missing
 
 

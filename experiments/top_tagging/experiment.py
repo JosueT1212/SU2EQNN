@@ -66,6 +66,8 @@ def build_model(cfg) -> TopTaggingWrapper:
         in_mv_channels     : int (optional, default 1)
     """
     patch_mv_channels = getattr(cfg.model, "patch_mv_channels", None)
+    if getattr(getattr(cfg, "data", None), "patch", False) and patch_mv_channels is None:
+        raise ValueError("data.patch: true needs model.patch_mv_channels (else patch_mv is ignored)")
     net = SU2EQNN(
         in_mv_channels=getattr(cfg.model, "in_mv_channels", 1),
         out_mv_channels=1,

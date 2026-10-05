@@ -1,5 +1,7 @@
 """Public embedding API: one entry point, variant chosen by config."""
 
+import torch
+
 from experiments.top_tagging.embedding.core import (  # noqa: F401
     UNITS, apply_axis_channel_dropout, apply_patch_channel_dropout,
     get_batch_from_ptr,
@@ -37,6 +39,8 @@ def build_embedding(cfg, fourmomenta, ptr, aux) -> dict:
            cfg.data.beam_reference ("lightlike" default | "xyplane") picks the beam
            token(s): frame: rest boosts them (beams: boosted); frame: lab with
            xyplane uses the fixed unit bivector -e12 in place of the +-e3 pair.
+           cfg.data.patch (default False): re-inject what the version adds every
+           block instead of at the input (split_patch).
     fourmomenta : (n_particles, 4) sparse, zero-padded rows already removed
     ptr         : (batchsize+1,) cumulative particle counts per jet
     aux         : dict of per-jet tensors — "axes", "masses", "phases", "p_lead" (lab),
@@ -105,6 +109,9 @@ def build_embedding(cfg, fourmomenta, ptr, aux) -> dict:
         for inj in chosen:
             inj.fn(mv, fourmomenta, ptr, particle_batch, aux, rescale)
 
+    if getattr(cfg.data, "patch", False):
+        mv, extras = split_patch(mv, layout_name)
+
     out = attach_spurions(mv, ptr, two_beams, tokens)
     for key, value in extras.items():
         if key == "_patch_particles":
@@ -112,6 +119,28 @@ def build_embedding(cfg, fourmomenta, ptr, aux) -> dict:
         else:
             out[key] = value
     return out
+
+
+def split_patch(mv, layout_name):
+    """data.patch: true — the patch version of an input-injection embedding.
+
+    Input keeps only (E, p) in channel 0, as the baseline; everything the version
+    adds goes to the patch stream, re-injected every block. multi_channel: axis
+    channels 1..K (wedges plus injected slots). single_channel: slots 4-7 of
+    channel 0 (wedge plus pseudoscalar) as one patch channel. With no injector,
+    multi_channel reproduces the `patch` layout exactly.
+    """
+    if layout_name == "multi_channel":
+        return mv[:, :1], {"_patch_particles": mv[:, 1:]}
+    if layout_name == "single_channel":
+        patch = torch.zeros_like(mv)
+        patch[:, :, 4:] = mv[:, :, 4:]
+        mv = mv.clone()
+        mv[:, :, 4:] = 0
+        return mv, {"_patch_particles": patch}
+    raise ValueError(
+        f"data.patch: true needs layout multi_channel or single_channel, got {layout_name!r}"
+    )
 
 
 def check_rest_frame(layout_name, inject_names, aux, beams, beam_reference=None):

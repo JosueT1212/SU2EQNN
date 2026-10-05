@@ -73,3 +73,15 @@ def test_xyplane_config_is_twin_plus_beam_reference(name):
     assert new.pop("training.checkpoint_path") == f"checkpoints/top_tagging_{name}_xyplane_full_b12.pt"
     twin.pop("training.checkpoint_path")
     assert new == twin
+
+
+@pytest.mark.parametrize("name", ["subjet_mass", "pseudoscalar_triad", "pseudoscalar_handedness",
+                                  "single_channel_axis", "single_channel_axis_b"])
+def test_xyplane_patch_config_is_input_twin_plus_patch(name):
+    flat = lambda n: {f"{s}.{k}": v for s, d in OmegaConf.to_container(
+        OmegaConf.load(f"config/top_tagging_{n}_full_b12.yaml")).items() for k, v in d.items()}
+    twin, new = flat(f"{name}_xyplane"), flat(f"{name}_patch_xyplane")
+    diff = {k for k in twin.keys() | new.keys() if twin.get(k) != new.get(k)}
+    assert diff <= {"data.patch", "model.in_mv_channels", "model.patch_mv_channels",
+                    "training.checkpoint_path"}, diff
+    assert new["data.patch"] is True and new["model.in_mv_channels"] == 1

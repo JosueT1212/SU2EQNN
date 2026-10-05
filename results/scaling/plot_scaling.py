@@ -31,11 +31,15 @@ STYLE = {
 }
 SENCILLA = ["r1", "grade2_bivectors", "subjet_mass", "pseudoscalar_triad",
             "pseudoscalar_handedness", "single_channel_axis", "single_channel_axis_b"]
+PATCH = ["r1", "bivector_patch", "subjet_mass_patch", "pseudoscalar_triad_patch",
+         "pseudoscalar_handedness_patch", "single_channel_axis_patch", "single_channel_axis_b_patch"]
+for _m in SENCILLA[2:]:  # patch twins: same colour and marker as the input version, dashed
+    STYLE[_m + "_patch"] = (STYLE[_m][0] + ", patch", STYLE[_m][1], STYLE[_m][2], "--")
 PANELS = [
     ("Naive, sencilla", "darkred", SENCILLA),
-    ("Naive, patch",    "darkred", ["r1", "bivector_patch"]),
+    ("Naive, patch",    "darkred", PATCH),
     ("Little group, sencilla", "navy", [m + "_little" for m in SENCILLA]),
-    ("Little group, patch",    "navy", ["r1_little", "bivector_patch_little"]),
+    ("Little group, patch",    "navy", [m + "_little" for m in PATCH]),
 ]
 
 
@@ -64,6 +68,7 @@ PAIR_TITLES = {  # one panel per variant, baseline vs variant (Li et al. Fig. 4 
     "single_channel_axis":     "Jet axis in channel",
     "single_channel_axis_b":   "Jet axis in channel + lead pseudoscalar",
 }
+PAIR_TITLES.update({m + "_patch": PAIR_TITLES[m] + " (patch)" for m in SENCILLA[2:]})
 LI_RC = {"font.family": "serif", "font.serif": ["Times New Roman", "STIXGeneral", "DejaVu Serif"],
          "mathtext.fontset": "stix", "font.size": 11}
 
@@ -127,10 +132,10 @@ def plot_pairs(runs, outdir, baseline="r1"):
 
 FOUR = [  # (file stem, title, colour, models): one PNG per panel, Li et al. style, no grid
     ("naive_input", "Naive, input injection", "#8B1A1A", SENCILLA),
-    ("naive_patch", "Naive, patch injection", "#8B1A1A", ["r1", "bivector_patch"]),
+    ("naive_patch", "Naive, patch injection", "#8B1A1A", PATCH),
     ("little_group_input", "Little group, input injection", "#1F3A8A",
      [m + "_little" for m in SENCILLA]),
-    ("little_group_patch", "Little group, patch injection", "#1F3A8A", ["r1_little", "bivector_patch_little"]),
+    ("little_group_patch", "Little group, patch injection", "#1F3A8A", [m + "_little" for m in PATCH]),
 ]
 LITTLE_LABELS = {  # rest-frame ports; e/f/g are analogs, not the same observables
     "r1": "Baseline", "grade2_bivectors": "+ subjet-axis bivectors",
@@ -140,12 +145,14 @@ LITTLE_LABELS = {  # rest-frame ports; e/f/g are analogs, not the same observabl
     "single_channel_axis_b": "leading subjet in channel + lead ps.",
     "bivector_patch": "+ subjet-axis bivectors, patch",
 }
+LITTLE_LABELS.update({m + "_patch": LITTLE_LABELS[m] + ", patch" for m in SENCILLA[2:]})
 for _m, _label in LITTLE_LABELS.items():
     STYLE[_m + "_little"] = (_label, *STYLE[_m][1:])
 FOUR_COLORS = {"r1": "tab:blue", "grade2_bivectors": "tab:orange", "subjet_mass": "tab:green",
                "pseudoscalar_triad": "tab:red", "pseudoscalar_handedness": "tab:purple",
                "single_channel_axis": "tab:brown", "single_channel_axis_b": "tab:pink",
                "bivector_patch": "tab:orange"}
+FOUR_COLORS.update({m + "_patch": FOUR_COLORS[m] for m in SENCILLA[2:]})
 
 
 def plot_four(runs, outdir):
@@ -178,7 +185,7 @@ def plot_four(runs, outdir):
                 x = x * 1.035 ** (k - (len(models) - 1) / 2)   # dodge
                 c = FOUR_COLORS[m.removesuffix("_little")]
                 ax.fill_between(x, y - e, y + e, color=c, alpha=0.12, lw=0)
-                ax.errorbar(x, y, yerr=e, color=c, fmt="-", lw=1.8, elinewidth=1.6,
+                ax.errorbar(x, y, yerr=e, color=c, fmt=STYLE[m][3], lw=1.8, elinewidth=1.6,
                             capsize=0, label=STYLE[m][0])
             if models:
                 leg = ax.legend(loc="lower right", fontsize=10, framealpha=0.9, title=title,
