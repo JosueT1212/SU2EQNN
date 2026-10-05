@@ -22,11 +22,11 @@ if [ ! -f $V/toptagging_full_durham.npz ]; then
     $V/toptagging_full.npz $V/toptagging_full_durham.tmp.npz
   mv $V/toptagging_full_durham.tmp.npz $V/toptagging_full_durham.npz
 fi
-[ -f $V/toptagging_1M_durham.npz ] || (cd results/scaling && $PY make_durham_subsets.py)
+[ -f $V/toptagging_10k_durham.npz ] && [ -f $V/toptagging_1M_durham.npz ] || (cd results/scaling && $PY make_durham_subsets.py)
 mkdir -p data
 ln -sf $V/toptagging_full.npz data/toptagging_full.npz
 ln -sf $V/toptagging_full_aux.npz data/toptagging_full_aux.npz
-for tag in 30k 100k 300k 1M full; do
+for tag in 10k 30k 100k 300k 1M full; do
   ln -sf $V/toptagging_${tag}_durham.npz data/toptagging_${tag}_durham.npz
 done
 ls -la $V/ data/

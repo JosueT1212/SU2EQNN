@@ -11,7 +11,7 @@ import numpy as np
 SRC = "/var/tmp/arivero/toptagging_full_durham.npz"
 NAIVE = "/var/tmp/arivero/toptagging_{tag}.npz"   # make_subsets.py output, same jets
 DST = "/var/tmp/arivero/toptagging_{tag}_durham.npz"
-SIZES = {"30k": 30_000, "100k": 100_000, "300k": 300_000, "1M": 1_000_000}
+SIZES = {"10k": 10_000, "30k": 30_000, "100k": 100_000, "300k": 300_000, "1M": 1_000_000}
 SEED = 1  # make_subsets.py
 
 src = np.load(SRC)
@@ -21,6 +21,9 @@ held = {k: src[k] for k in src.files if not k.endswith("_train")}
 train = {k: src[k] for k in src.files if k.endswith("_train")}
 
 for tag, n in SIZES.items():
+    if os.path.exists(DST.format(tag=tag)):   # idempotent: a present file is complete
+        print(tag, "exists, skipped")
+        continue
     idx = np.sort(perm[:n])
     out = dict(held, **{k: v[idx] for k, v in train.items()})
     naive = np.load(NAIVE.format(tag=tag))

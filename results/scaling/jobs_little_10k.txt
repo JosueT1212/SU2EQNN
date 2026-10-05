@@ -1,0 +1,25 @@
+# config size seed — little-group 10k point (8 versions x seeds 0-2). Submit with submit_little_10k.sh.
+top_tagging_rest_xyplane_full_b12 10k 0
+top_tagging_rest_durham_axes_full_b12 10k 0
+top_tagging_rest_durham_patch_full_b12 10k 0
+top_tagging_rest_durham_masses_full_b12 10k 0
+top_tagging_rest_durham_handedness_full_b12 10k 0
+top_tagging_rest_durham_plane_normal_full_b12 10k 0
+top_tagging_rest_durham_single_channel_full_b12 10k 0
+top_tagging_rest_durham_single_channel_b_full_b12 10k 0
+top_tagging_rest_xyplane_full_b12 10k 1
+top_tagging_rest_durham_axes_full_b12 10k 1
+top_tagging_rest_durham_patch_full_b12 10k 1
+top_tagging_rest_durham_masses_full_b12 10k 1
+top_tagging_rest_durham_handedness_full_b12 10k 1
+top_tagging_rest_durham_plane_normal_full_b12 10k 1
+top_tagging_rest_durham_single_channel_full_b12 10k 1
+top_tagging_rest_durham_single_channel_b_full_b12 10k 1
+top_tagging_rest_xyplane_full_b12 10k 2
+top_tagging_rest_durham_axes_full_b12 10k 2
+top_tagging_rest_durham_patch_full_b12 10k 2
+top_tagging_rest_durham_masses_full_b12 10k 2
+top_tagging_rest_durham_handedness_full_b12 10k 2
+top_tagging_rest_durham_plane_normal_full_b12 10k 2
+top_tagging_rest_durham_single_channel_full_b12 10k 2
+top_tagging_rest_durham_single_channel_b_full_b12 10k 2
