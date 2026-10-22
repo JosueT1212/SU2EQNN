@@ -128,8 +128,11 @@ def split_patch(mv, layout_name):
     adds goes to the patch stream, re-injected every block. multi_channel: axis
     channels 1..K (wedges plus injected slots). single_channel: slots 4-7 of
     channel 0 (wedge plus pseudoscalar) as one patch channel. With no injector,
-    multi_channel reproduces the `patch` layout exactly.
+    multi_channel reproduces the `patch` layout exactly. Plain baseline (one channel,
+    nothing added): the patch is a copy of (E, p), and the input is unchanged.
     """
+    if layout_name == "multi_channel" and mv.shape[1] == 1:
+        return mv, {"_patch_particles": mv.clone()}
     if layout_name == "multi_channel":
         return mv[:, :1], {"_patch_particles": mv[:, 1:]}
     if layout_name == "single_channel":

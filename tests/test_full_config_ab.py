@@ -36,8 +36,8 @@ def flat(name):
 FULL = sorted(p.stem for p in CONFIG.glob("top_tagging_*_full_b12.yaml"))
 
 
-def test_sweep_has_all_thirty_six_versions():
-    assert len(FULL) == 36
+def test_sweep_has_all_thirty_eight_versions():
+    assert len(FULL) == 38
 
 
 @pytest.mark.parametrize("name", FULL)

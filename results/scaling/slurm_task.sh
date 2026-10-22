@@ -21,7 +21,8 @@ case $tag in 10k) n=10000;; 30k) n=30000;; 100k) n=100000;; 300k) n=300000;; 1M)
 # baselines read kinematics only (aux keys would add axis channels); naive variants the lab
 # aux file; little-group variants the rest-frame Durham labels
 case $cfg in
-  top_tagging_r1_full_b12|top_tagging_r1_xyplane_full_b12|top_tagging_rest_xyplane_full_b12) data=data/toptagging_${tag}.npz ;;
+  top_tagging_r1_full_b12|top_tagging_r1_xyplane_full_b12|top_tagging_rest_xyplane_full_b12|\
+  top_tagging_r1_patch_xyplane_full_b12|top_tagging_rest_xyplane_patch_full_b12) data=data/toptagging_${tag}.npz ;;
   top_tagging_rest_*) data=data/toptagging_${tag}_durham.npz ;;
   *) data=data/toptagging_${tag}_aux.npz ;;
 esac
@@ -30,10 +31,12 @@ epochs=21; bs=128
 total=$(( epochs * ((n + bs - 1) / bs) ))   # loader keeps the last partial batch
 if [ "$tag" = full ]; then
   # Full-dataset runs are full-b12 runs: same layout and protocol as the seed sweep
-  # (results/seed_sweep/slurm_task.sh): seed_<s>/<config>.log, the config's own cosine
+  # (results/seed_sweep/slurm_task.sh): full_runs/<config>.log (seed 0; other seeds get a
+  # _seed<s> suffix), the config's own cosine
   # length and validation every 5000 steps. A later sweep relaunch skips them as done.
   run=$cfg
-  log=/home/arivero/official_paper_logs/seed_$seed/$cfg.log
+  log=/home/arivero/official_paper_logs/full_runs/$cfg.log
+  [ "$seed" = 0 ] || log=/home/arivero/official_paper_logs/full_runs/${cfg}_seed${seed}.log
   ckpt=checkpoints/seed_${seed}/${cfg}.pt
   outdir=outputs/seed_${seed}/${cfg}
   schedule=()

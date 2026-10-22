@@ -1,6 +1,6 @@
 """AUC vs training size, styled after Fig. 4 of Li et al., "Does Lorentz-symmetric
 design boost network performance in jet physics?" (log x, mean line with std
-errorbars plus a ±std band, dashed grid, legend lower right).
+errorbars joined by dotted lines, dashed grid, legend lower right).
 
 Input: long CSV with columns model,size,seed,test_auc (one row per training).
 Four panels: naive/little frame x sencilla (inject once at input) / patch
@@ -27,14 +27,15 @@ STYLE = {
     "pseudoscalar_handedness": ("+ local handedness",             "tab:purple", "P", "-"),
     "single_channel_axis":     ("jet axis in channel",            "tab:brown",  "X", "-"),
     "single_channel_axis_b":   ("jet axis in channel + lead ps.", "tab:pink",   "*", "-"),
-    "bivector_patch":          ("+ axis bivectors, patch",        "tab:orange", "D", "--"),
+    "bivector_patch":          ("+ axis bivectors, patch",        "tab:orange", "D", "-"),
 }
 SENCILLA = ["r1", "grade2_bivectors", "subjet_mass", "pseudoscalar_triad",
             "pseudoscalar_handedness", "single_channel_axis", "single_channel_axis_b"]
-PATCH = ["r1", "bivector_patch", "subjet_mass_patch", "pseudoscalar_triad_patch",
+PATCH = ["r1", "r1_patch", "bivector_patch", "subjet_mass_patch", "pseudoscalar_triad_patch",
          "pseudoscalar_handedness_patch", "single_channel_axis_patch", "single_channel_axis_b_patch"]
 for _m in SENCILLA[2:]:  # patch twins: same colour and marker as the input version, dashed
-    STYLE[_m + "_patch"] = (STYLE[_m][0] + ", patch", STYLE[_m][1], STYLE[_m][2], "--")
+    STYLE[_m + "_patch"] = (STYLE[_m][0] + ", patch", STYLE[_m][1], STYLE[_m][2], "-")
+STYLE["r1_patch"] = ("Baseline, patch", "tab:cyan", "o", "-")  # shares panels with r1
 PANELS = [
     ("Naive, sencilla", "darkred", SENCILLA),
     ("Naive, patch",    "darkred", PATCH),
@@ -43,11 +44,15 @@ PANELS = [
 ]
 
 
+SKIP_SIZES = {1_000_000}  # 1M sits next to the full set on log-x; it stays in the tables only
+
+
 def load(path):
     runs = defaultdict(lambda: defaultdict(list))  # model -> size -> [auc]
     with open(path) as f:
         for r in csv.DictReader(f):
-            runs[r["model"]][int(r["size"])].append(float(r["test_auc"]))
+            if int(r["size"]) not in SKIP_SIZES:
+                runs[r["model"]][int(r["size"])].append(float(r["test_auc"]))
     return runs
 
 
@@ -73,11 +78,17 @@ LI_RC = {"font.family": "serif", "font.serif": ["Times New Roman", "STIXGeneral"
          "mathtext.fontset": "stix", "font.size": 11}
 
 
+def tick_labels(ticks):
+    """10k ... 1M; the full set (not a round size) is labelled as such."""
+    return [f"{t / 1e3:g}k" if t < 1e6 else f"{t / 1e6:g}M" if t % 1_000_000 == 0
+            else f"full ({t / 1e6:.2f}M)" for t in ticks]
+
+
 def _li_axis(ax, title, ticks):
     ax.set_title(title, loc="left", color="#8B1A1A", fontweight="bold", fontsize=14)
     ax.grid(True, ls="--", lw=0.8, color="0.6")
     ax.set_xscale("log")
-    ax.set_xticks(ticks, [f"{t:d}" for t in ticks])
+    ax.set_xticks(ticks, tick_labels(ticks))
     ax.minorticks_off()
     ax.set_xlabel("Training sample size")
     ax.set_ylabel("AUC")
@@ -85,8 +96,7 @@ def _li_axis(ax, title, ticks):
 
 def _li_curve(ax, by_size, label, color):
     x, y, e, _ = stats(by_size)
-    ax.fill_between(x, y - e, y + e, color=color, alpha=0.2, lw=0)
-    ax.errorbar(x, y, yerr=e, color=color, fmt="-", lw=1.8, elinewidth=1.8, capsize=0,
+    ax.errorbar(x, y, yerr=e, color=color, fmt="o", ms=5, elinewidth=1.8, capsize=3,
                 label=label)
 
 
@@ -145,7 +155,7 @@ LITTLE_LABELS = {  # rest-frame ports; e/f/g are analogs, not the same observabl
     "single_channel_axis_b": "leading subjet in channel + lead ps.",
     "bivector_patch": "+ subjet-axis bivectors, patch",
 }
-LITTLE_LABELS.update({m + "_patch": LITTLE_LABELS[m] + ", patch" for m in SENCILLA[2:]})
+LITTLE_LABELS.update({m + "_patch": LITTLE_LABELS[m] + ", patch" for m in ["r1", *SENCILLA[2:]]})
 for _m, _label in LITTLE_LABELS.items():
     STYLE[_m + "_little"] = (_label, *STYLE[_m][1:])
 FOUR_COLORS = {"r1": "tab:blue", "grade2_bivectors": "tab:orange", "subjet_mass": "tab:green",
@@ -153,6 +163,7 @@ FOUR_COLORS = {"r1": "tab:blue", "grade2_bivectors": "tab:orange", "subjet_mass"
                "single_channel_axis": "tab:brown", "single_channel_axis_b": "tab:pink",
                "bivector_patch": "tab:orange"}
 FOUR_COLORS.update({m + "_patch": FOUR_COLORS[m] for m in SENCILLA[2:]})
+FOUR_COLORS["r1_patch"] = "tab:cyan"
 
 
 def plot_four(runs, outdir):
@@ -170,7 +181,7 @@ def plot_four(runs, outdir):
         for stem, title, tcolor, models in FOUR:
             fig, ax = plt.subplots(figsize=(6.5, 4.8))
             ax.set_xscale("log")
-            ax.set_xticks(ticks, [f"{t:d}" for t in ticks])
+            ax.set_xticks(ticks, tick_labels(ticks))
             ax.minorticks_off()
             ax.set_xlabel("Training sample size", fontsize=18)
             ax.set_ylabel("AUC", fontsize=18)
@@ -184,9 +195,8 @@ def plot_four(runs, outdir):
                 x, y, e, _ = stats(runs[m])
                 x = x * 1.035 ** (k - (len(models) - 1) / 2)   # dodge
                 c = FOUR_COLORS[m.removesuffix("_little")]
-                ax.fill_between(x, y - e, y + e, color=c, alpha=0.12, lw=0)
-                ax.errorbar(x, y, yerr=e, color=c, fmt=STYLE[m][3], lw=1.8, elinewidth=1.6,
-                            capsize=0, label=STYLE[m][0])
+                ax.errorbar(x, y, yerr=e, color=c, marker=STYLE[m][2], ls=":", lw=1.6, ms=6,
+                            elinewidth=1.6, capsize=3, label=STYLE[m][0])
             if models:
                 leg = ax.legend(loc="lower right", fontsize=10, framealpha=0.9, title=title,
                                 title_fontproperties={"weight": "bold", "size": 11})
@@ -215,12 +225,11 @@ def plot(runs, out, watermark=None):
             label, color, marker, ls = STYLE[m]
             x, y, e, n = stats(runs[m])
             nseeds.add(n)
-            ax.fill_between(x, y - e, y + e, color=color, alpha=0.2, lw=0)
-            ax.errorbar(x, y, yerr=e, color=color, marker=marker, ms=4, ls=ls, lw=1.2,
-                        capsize=0, label=label)
+            ax.errorbar(x, y, yerr=e, color=color, marker=marker, ms=4, ls=":", lw=1.3,
+                        capsize=2, label=label)
         ax.legend(loc="lower right", fontsize=8, frameon=True)
     ticks = sorted({s for m in runs.values() for s in m})
-    axes[0, 0].set_xticks(ticks, [f"{t / 1e6:g}M" if t >= 1e6 else f"{t / 1e3:g}k" for t in ticks])
+    axes[0, 0].set_xticks(ticks, tick_labels(ticks))
     axes[0, 0].minorticks_off()
     for ax in axes[1]:
         ax.set_xlabel("Training sample size")

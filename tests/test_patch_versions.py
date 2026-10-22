@@ -140,3 +140,31 @@ def test_patch_flag_without_patch_channels_raises():
                                               in_mv_channels=1))
     with pytest.raises(ValueError, match="patch_mv_channels"):
         build_model(c)
+
+
+def test_baseline_patch_reinjects_kinematics():
+    """Baseline patch: input unchanged, patch = a copy of (E, p) in channel 0."""
+    x, ptr = toy_jets()
+    base = build_embedding(lab_cfg("multi_channel"), x, ptr, {})
+    new = build_embedding(lab_cfg("multi_channel", patch=True), x, ptr, {})
+    assert torch.equal(new["mv"], base["mv"])
+    assert new["patch_mv"].shape[1] == 1
+    particles = ~new["is_beam"]
+    assert torch.equal(new["patch_mv"][particles], new["mv"][particles])
+    assert (new["patch_mv"][new["is_beam"]] == 0).all()
+
+
+def test_little_baseline_patch_invariant_under_beam_stabilizer():
+    c = SimpleNamespace(
+        data=SimpleNamespace(embedding="multi_channel", inject=[], two_beams=True,
+                             rescale_data=True, frame="rest", beams="boosted",
+                             beam_reference="xyplane", patch=True),
+        model=SimpleNamespace(hidden_mv_channels=4, num_blocks=2, num_heads=2,
+                              multi_query=False, in_mv_channels=1, patch_mv_channels=1))
+    x, ptr = toy_jets()
+    L = rotation_matrix([0, 0, 1], 0.7) @ boost_matrix(1.3, [0, 0, 1])
+    out, out_L = model_output_aux(c, x, ptr, {}), model_output_aux(c, x @ L.T, ptr, {})
+    assert torch.isfinite(out).all()
+    assert torch.allclose(out, out_L, rtol=1e-6, atol=1e-7)
+    L = rotation_matrix([1, 0, 0], 0.7)                  # x-rotation moves the beam frame
+    assert not torch.allclose(out, model_output_aux(c, x @ L.T, ptr, {}), rtol=1e-6, atol=1e-7)

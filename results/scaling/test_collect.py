@@ -25,19 +25,28 @@ with tempfile.TemporaryDirectory() as d:
     ]), rows
     assert missing == ["top_tagging_r1_full_b12_1M_seed0.log"], missing
 with tempfile.TemporaryDirectory() as d:
-    (Path(d) / "seed_0").mkdir()
-    (Path(d) / "seed_0" / "top_tagging_rest_durham_patch_full_b12.log").write_text(
+    (Path(d) / "full_runs").mkdir()
+    (Path(d) / "full_runs" / "top_tagging_rest_durham_patch_full_b12.log").write_text(
         "COMMIT=x JOB=1_0 HOST=h GPU=0 N=1211000 STEPS=1 TAG=full START=now\nTest AUC=0.9858 | a\nEXIT_STATUS=0 at now\n")
-    (Path(d) / "seed_0" / "top_tagging_r1_full_b12.log").write_text(   # old sweep log: ignored
+    (Path(d) / "full_runs" / "top_tagging_r1_full_b12.log").write_text(   # old sweep log: ignored
         "COMMIT=x JOB=3475805_0 HOST=h\nTest AUC=0.9850 | a\nEXIT_STATUS=0 at now\n")
-    (Path(d) / "seed_0" / "top_tagging_grade2_bivectors_xyplane_full_b12.log").write_text(
+    (Path(d) / "full_runs" / "top_tagging_grade2_bivectors_xyplane_full_b12.log").write_text(
         "COMMIT=x N=1211000 TAG=full\nStep 5000 | val AUC=0.98\n")
-    (Path(d) / "seed_0" / "top_tagging_subjet_mass_full_b12.log").write_text(   # naive +-e3 full: not official
+    (Path(d) / "full_runs" / "top_tagging_subjet_mass_full_b12.log").write_text(   # naive +-e3 full: not official
         "COMMIT=x N=1211000 TAG=full\nTest AUC=0.9840 | a\nEXIT_STATUS=0 at now\n")
-    (Path(d) / "seed_0" / "top_tagging_subjet_mass_patch_xyplane_full_b12.log").write_text(
+    (Path(d) / "full_runs" / "top_tagging_subjet_mass_patch_xyplane_full_b12.log").write_text(
         "COMMIT=x N=1211000 TAG=full\nTest AUC=0.9855 | a\nEXIT_STATUS=0 at now\n")
     rows, missing = collect_full(d)
     assert sorted(rows) == sorted([("bivector_patch_little", 1_211_000, 0, 0.9858),
                                    ("subjet_mass_patch", 1_211_000, 0, 0.9855)]), rows
-    assert missing == ["seed_0/top_tagging_grade2_bivectors_xyplane_full_b12.log"], missing
+    assert missing == ["full_runs/top_tagging_grade2_bivectors_xyplane_full_b12.log"], missing
 print("ok")
+# baseline patch versions: scaling and full-run names
+from collect import official_full_name
+with tempfile.TemporaryDirectory() as d:
+    for cfg in ("rest_xyplane_patch", "r1_patch_xyplane"):
+        (Path(d) / f"top_tagging_{cfg}_full_b12_30k_seed0.log").write_text(
+            "COMMIT=x N=30000\nTest AUC=0.9700 | a\nEXIT_STATUS=0 at now\n")
+    assert sorted(r[0] for r in collect(d)[0]) == ["r1_patch", "r1_patch_little"]
+assert official_full_name("rest_xyplane_patch") == "r1_patch_little"
+assert official_full_name("r1_patch_xyplane") == "r1_patch"

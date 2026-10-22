@@ -1,7 +1,7 @@
 """Scaling-study logs -> CSV for plot_scaling.py (model,size,seed,test_auc).
 
     python results/scaling/collect.py ~/official_paper_logs/scaling scaling.csv ~/official_paper_logs
-The optional third argument is the root holding seed_<s>/<config>.log: the full-dataset
+The optional third argument is the root holding full_runs/<config>.log: the full-dataset
 (tag full) points, which slurm_task.sh writes in the seed-sweep layout. Only logs whose
 header says TAG=full are taken from there. Only finished runs (EXIT_STATUS=0 with a Test AUC line) are kept; the rest are listed.
 """
@@ -24,6 +24,7 @@ LITTLE = {
     "rest_durham_plane_normal": "pseudoscalar_triad_little",
     "rest_durham_single_channel": "single_channel_axis_little",
     "rest_durham_single_channel_b": "single_channel_axis_b_little",
+    "rest_xyplane_patch": "r1_patch_little",
     "rest_durham_masses_patch": "subjet_mass_patch_little",
     "rest_durham_handedness_patch": "pseudoscalar_handedness_patch_little",
     "rest_durham_plane_normal_patch": "pseudoscalar_triad_patch_little",
@@ -50,7 +51,7 @@ def collect(log_dir):
     return rows, missing
 
 
-FULL_NAME = re.compile(r"top_tagging_(?P<cfg>.+)_full_b12\.log$")
+FULL_NAME = re.compile(r"top_tagging_(?P<cfg>.+?)_full_b12(?:_seed(?P<seed>[0-9]+))?\.log$")
 
 
 def official_full_name(cfg):
@@ -65,9 +66,9 @@ def official_full_name(cfg):
 
 
 def collect_full(root):
-    """Full-dataset points from <root>/seed_<s>/top_tagging_<cfg>_full_b12.log (TAG=full only)."""
+    """Full-dataset points from <root>/full_runs/top_tagging_<cfg>_full_b12[_seed<s>].log (TAG=full only)."""
     rows, missing = [], []
-    for log in sorted(Path(root).glob("seed_*/top_tagging_*_full_b12.log")):
+    for log in sorted(Path(root).glob("full_runs/top_tagging_*_full_b12*.log")):
         m = FULL_NAME.match(log.name)
         text = log.read_text()
         if not m or "TAG=full" not in text.split("\n", 1)[0] or official_full_name(m["cfg"]) is None:
@@ -77,7 +78,7 @@ def collect_full(root):
             missing.append(f"{log.parent.name}/{log.name}")
             continue
         size = int(re.search(r"\bN=(\d+)", text)[1])
-        seed = int(log.parent.name.removeprefix("seed_"))
+        seed = int(m["seed"] or 0)
         rows.append((official_full_name(m["cfg"]), size, seed, float(auc[-1])))
     return rows, missing
 

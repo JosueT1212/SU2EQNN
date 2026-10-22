@@ -1,0 +1,28 @@
+# config size seed — baseline patch versions ((E, p) re-injected every block), longest first.
+# Submit with submit_patch_baseline.sh. xy-plane spurion. 10k-300k x seeds 0-2, full x seed 0 (official); no 1M.
+top_tagging_r1_patch_xyplane_full_b12 full 0
+top_tagging_rest_xyplane_patch_full_b12 full 0
+top_tagging_r1_patch_xyplane_full_b12 300k 0
+top_tagging_r1_patch_xyplane_full_b12 300k 1
+top_tagging_r1_patch_xyplane_full_b12 300k 2
+top_tagging_rest_xyplane_patch_full_b12 300k 0
+top_tagging_rest_xyplane_patch_full_b12 300k 1
+top_tagging_rest_xyplane_patch_full_b12 300k 2
+top_tagging_r1_patch_xyplane_full_b12 100k 0
+top_tagging_r1_patch_xyplane_full_b12 100k 1
+top_tagging_r1_patch_xyplane_full_b12 100k 2
+top_tagging_rest_xyplane_patch_full_b12 100k 0
+top_tagging_rest_xyplane_patch_full_b12 100k 1
+top_tagging_rest_xyplane_patch_full_b12 100k 2
+top_tagging_r1_patch_xyplane_full_b12 30k 0
+top_tagging_r1_patch_xyplane_full_b12 30k 1
+top_tagging_r1_patch_xyplane_full_b12 30k 2
+top_tagging_rest_xyplane_patch_full_b12 30k 0
+top_tagging_rest_xyplane_patch_full_b12 30k 1
+top_tagging_rest_xyplane_patch_full_b12 30k 2
+top_tagging_r1_patch_xyplane_full_b12 10k 0
+top_tagging_r1_patch_xyplane_full_b12 10k 1
+top_tagging_r1_patch_xyplane_full_b12 10k 2
+top_tagging_rest_xyplane_patch_full_b12 10k 0
+top_tagging_rest_xyplane_patch_full_b12 10k 1
+top_tagging_rest_xyplane_patch_full_b12 10k 2
