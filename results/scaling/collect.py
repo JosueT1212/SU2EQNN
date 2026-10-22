@@ -37,7 +37,8 @@ def collect(log_dir):
     rows, missing = [], []
     for log in sorted(Path(log_dir).glob("*.log")):
         m = NAME.match(log.name)
-        if not m:
+        name = m and official_full_name(m["cfg"])
+        if not name:  # naive +-e3 runs are superseded by the xy-plane reruns
             continue
         text = log.read_text()
         auc = re.findall(r"Test AUC=([0-9.]+)", text)
@@ -46,8 +47,7 @@ def collect(log_dir):
             continue
         # "full" = the whole training set: its size comes from the N= header slurm_task.sh writes
         size = SIZES[m["tag"]] if m["tag"] in SIZES else int(re.search(r"\bN=(\d+)", text)[1])
-        name = m["cfg"] if m["cfg"].startswith("rest_") else m["cfg"].removesuffix("_xyplane")
-        rows.append((LITTLE.get(name, name), size, int(m["seed"]), float(auc[-1])))
+        rows.append((name, size, int(m["seed"]), float(auc[-1])))
     return rows, missing
 
 
@@ -55,7 +55,7 @@ FULL_NAME = re.compile(r"top_tagging_(?P<cfg>.+?)_full_b12(?:_seed(?P<seed>[0-9]
 
 
 def official_full_name(cfg):
-    """Paper name of a full-dataset config, or None if it is not an official run.
+    """Paper name of a config (full or subset), or None if it is not an official run.
 
     Naive official runs use the xy-plane spurion (<v>_xyplane configs) and take the
     standard naive name <v>; naive +-e3 full runs are not official. Little group: LITTLE.

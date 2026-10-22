@@ -4,9 +4,11 @@ from pathlib import Path
 from collect import collect, collect_full
 
 with tempfile.TemporaryDirectory() as d:
-    (Path(d) / "top_tagging_bivector_patch_full_b12_10k_seed2.log").write_text(
+    (Path(d) / "top_tagging_bivector_patch_xyplane_full_b12_10k_seed2.log").write_text(
         "COMMIT=x\n[..][__main__][INFO] - Test AUC=0.9712 | accuracy=0.9100\nEXIT_STATUS=0 at now\n")
-    (Path(d) / "top_tagging_r1_full_b12_1M_seed0.log").write_text("COMMIT=x\nStep 5 | val AUC=0.9\n")
+    (Path(d) / "top_tagging_r1_xyplane_full_b12_1M_seed0.log").write_text("COMMIT=x\nStep 5 | val AUC=0.9\n")
+    (Path(d) / "top_tagging_r1_full_b12_30k_seed0.log").write_text(   # naive +-e3: superseded, skipped
+        "COMMIT=x N=30000\nTest AUC=0.9600 | a\nEXIT_STATUS=0 at now\n")
     (Path(d) / "top_tagging_rest_durham_plane_normal_full_b12_full_seed0.log").write_text(
         "COMMIT=x JOB=1_0 HOST=h GPU=0 N=1211000 STEPS=1 VAL_EVERY=1\nTest AUC=0.9850 | a\nEXIT_STATUS=0 at now\n")
     (Path(d) / "top_tagging_rest_xyplane_full_b12_30k_seed1.log").write_text(
@@ -23,7 +25,7 @@ with tempfile.TemporaryDirectory() as d:
         ("pseudoscalar_triad_little", 1_211_000, 0, 0.9850),
         ("r1_little", 30_000, 1, 0.9700),
     ]), rows
-    assert missing == ["top_tagging_r1_full_b12_1M_seed0.log"], missing
+    assert missing == ["top_tagging_r1_xyplane_full_b12_1M_seed0.log"], missing
 with tempfile.TemporaryDirectory() as d:
     (Path(d) / "full_runs").mkdir()
     (Path(d) / "full_runs" / "top_tagging_rest_durham_patch_full_b12.log").write_text(

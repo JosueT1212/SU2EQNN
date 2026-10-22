@@ -31,11 +31,10 @@ STYLE = {
 }
 SENCILLA = ["r1", "grade2_bivectors", "subjet_mass", "pseudoscalar_triad",
             "pseudoscalar_handedness", "single_channel_axis", "single_channel_axis_b"]
-PATCH = ["r1", "r1_patch", "bivector_patch", "subjet_mass_patch", "pseudoscalar_triad_patch",
+PATCH = ["r1_patch", "bivector_patch", "subjet_mass_patch", "pseudoscalar_triad_patch",
          "pseudoscalar_handedness_patch", "single_channel_axis_patch", "single_channel_axis_b_patch"]
-for _m in SENCILLA[2:]:  # patch twins: same colour and marker as the input version, dashed
+for _m in ["r1", *SENCILLA[2:]]:  # patch twins: same colour and marker as the input version, dashed
     STYLE[_m + "_patch"] = (STYLE[_m][0] + ", patch", STYLE[_m][1], STYLE[_m][2], "-")
-STYLE["r1_patch"] = ("Baseline, patch", "tab:cyan", "o", "-")  # shares panels with r1
 PANELS = [
     ("Naive, sencilla", "darkred", SENCILLA),
     ("Naive, patch",    "darkred", PATCH),
@@ -102,14 +101,17 @@ def _li_curve(ax, by_size, label, color):
 
 def plot_pairs(runs, outdir, baseline="r1"):
     """Li et al. style: one panel per variant against the baseline, shared y-range.
+    Patch variants face the patch baseline (baseline + "_patch") when it has runs.
 
     Writes pairs.pdf/.png (all panels) and pair_<variant>.png (one per panel).
     """
     outdir = Path(outdir)
     variants = [m for m in PAIR_TITLES if m in runs]
+    patch_base = baseline + "_patch" if baseline + "_patch" in runs else baseline
+    base = {m: patch_base if m.endswith("_patch") else baseline for m in variants}
     ticks = sorted({s for m in runs.values() for s in m})
-    lo = min(stats(runs[m])[1].min() - stats(runs[m])[2].max() for m in [baseline, *variants])
-    hi = max(stats(runs[m])[1].max() + stats(runs[m])[2].max() for m in [baseline, *variants])
+    lo = min(stats(runs[m])[1].min() - stats(runs[m])[2].max() for m in [*set(base.values()), *variants])
+    hi = max(stats(runs[m])[1].max() + stats(runs[m])[2].max() for m in [*set(base.values()), *variants])
     ylim = (lo - 0.0005, hi + 0.0005)
     with plt.rc_context(LI_RC):
         ncol = 2
@@ -119,7 +121,7 @@ def plot_pairs(runs, outdir, baseline="r1"):
             ax.set_visible(False)
         for ax, m in zip(axes.flat, variants):
             _li_axis(ax, PAIR_TITLES[m], ticks)
-            _li_curve(ax, runs[baseline], "Baseline", "tab:blue")
+            _li_curve(ax, runs[base[m]], STYLE[base[m]][0], "tab:blue")
             _li_curve(ax, runs[m], f"+ {PAIR_TITLES[m].lower()}", "tab:orange")
             ax.set_ylim(*ylim)
             ax.legend(loc="lower right", fontsize=11, framealpha=0.9)
@@ -130,7 +132,7 @@ def plot_pairs(runs, outdir, baseline="r1"):
         for m in variants:  # single panels
             fig, ax = plt.subplots(figsize=(6.5, 4.6))
             _li_axis(ax, PAIR_TITLES[m], ticks)
-            _li_curve(ax, runs[baseline], "Baseline", "tab:blue")
+            _li_curve(ax, runs[base[m]], STYLE[base[m]][0], "tab:blue")
             _li_curve(ax, runs[m], f"+ {PAIR_TITLES[m].lower()}", "tab:orange")
             ax.set_ylim(*ylim)
             ax.legend(loc="lower right", fontsize=11, framealpha=0.9)
@@ -162,8 +164,7 @@ FOUR_COLORS = {"r1": "tab:blue", "grade2_bivectors": "tab:orange", "subjet_mass"
                "pseudoscalar_triad": "tab:red", "pseudoscalar_handedness": "tab:purple",
                "single_channel_axis": "tab:brown", "single_channel_axis_b": "tab:pink",
                "bivector_patch": "tab:orange"}
-FOUR_COLORS.update({m + "_patch": FOUR_COLORS[m] for m in SENCILLA[2:]})
-FOUR_COLORS["r1_patch"] = "tab:cyan"
+FOUR_COLORS.update({m + "_patch": FOUR_COLORS[m] for m in ["r1", *SENCILLA[2:]]})
 
 
 def plot_four(runs, outdir):
