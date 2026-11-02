@@ -1,0 +1,32 @@
+# config tag seed depth — statement-8 follow-up (sector-energy probe): rest frame makes the signal
+# readable ~2 blocks earlier; does it also need fewer blocks? Clean lab/rest pairs only (configs differ
+# only in data.frame/data.beams). Depth runs override model.num_blocks and write *_b<depth> logs/ckpts,
+# which collect.py skips. Longest first. Submit with submit_seeds_depth.sh.
+# A: full-dataset seeds 1-2 at b12 (the 12-block arm of B for seeds 1-2; seed 0 exists).
+top_tagging_r1_xyplane_full_b12 full 1 12
+top_tagging_rest_xyplane_full_b12 full 1 12
+top_tagging_r1_xyplane_full_b12 full 2 12
+top_tagging_rest_xyplane_full_b12 full 2 12
+top_tagging_r1_patch_xyplane_full_b12 full 1 12
+top_tagging_rest_xyplane_patch_full_b12 full 1 12
+top_tagging_r1_patch_xyplane_full_b12 full 2 12
+top_tagging_rest_xyplane_patch_full_b12 full 2 12
+# B: depth ablation, plain pair, depths 8/6/4 x seeds 0-2.
+top_tagging_r1_xyplane_full_b12 full 0 8
+top_tagging_rest_xyplane_full_b12 full 0 8
+top_tagging_r1_xyplane_full_b12 full 1 8
+top_tagging_rest_xyplane_full_b12 full 1 8
+top_tagging_r1_xyplane_full_b12 full 2 8
+top_tagging_rest_xyplane_full_b12 full 2 8
+top_tagging_r1_xyplane_full_b12 full 0 6
+top_tagging_rest_xyplane_full_b12 full 0 6
+top_tagging_r1_xyplane_full_b12 full 1 6
+top_tagging_rest_xyplane_full_b12 full 1 6
+top_tagging_r1_xyplane_full_b12 full 2 6
+top_tagging_rest_xyplane_full_b12 full 2 6
+top_tagging_r1_xyplane_full_b12 full 0 4
+top_tagging_rest_xyplane_full_b12 full 0 4
+top_tagging_r1_xyplane_full_b12 full 1 4
+top_tagging_rest_xyplane_full_b12 full 1 4
+top_tagging_r1_xyplane_full_b12 full 2 4
+top_tagging_rest_xyplane_full_b12 full 2 4
